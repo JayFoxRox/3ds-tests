@@ -97,22 +97,22 @@ static int sceneRender(unsigned int mode)
   }
 
   if (mode == 0) {
-    DRAW(64,
+    DRAW(0x18,
          3, 0x210,
          GPU_UNSIGNED_BYTE, 4, 4,
          GPU_FLOAT, float, 1.0f, 0.0f);
   } else if (mode == 1) {
-    DRAW(64,
+    DRAW(0x18,
          3, 0x210,
          GPU_UNSIGNED_BYTE, 3, 4,
          GPU_FLOAT, float, 1.0f, 0.0f);
   } else if (mode == 2) {
-    DRAW(64,
+    DRAW(0x1C,
          4, 0x21C0, // a0, 4 byte pad, a1, a2
          GPU_UNSIGNED_BYTE, 4, 8,
          GPU_FLOAT, float, 1.0f, 0.0f);  
   } else if (mode == 3) {
-    DRAW(64,
+    DRAW(0x1C,
          4, 0x2C10, // a0, a1, 4 byte pad, a2
 
          //unaligned:
@@ -133,7 +133,7 @@ static int sceneRender(unsigned int mode)
          GPU_UNSIGNED_BYTE, 3, 8,
          GPU_FLOAT, float, 1.0f, 0.0f);      
   } else if (mode == 4) {
-    DRAW(64,
+    DRAW(0x1C,
          5, 0x21C10, // a0, a1, 4 byte pad, a1, a2
 
          //unaligned:
@@ -154,37 +154,11 @@ static int sceneRender(unsigned int mode)
          // = 12 byte padding
 
          GPU_UNSIGNED_BYTE, 3, 12,
-         GPU_FLOAT, float, 1.0f, 0.0f);
+         GPU_SHORT, int16_t, 1, 0);
   } else if (mode == 5) {
-    DRAW(64,
-         4, 0x2C10, // a0, a1, 4 byte pad, a1, a2
-
-         //unaligned explicit-pad:
-         // 0-7:         a0
-         // 8,9,10:      a1 pad
-         // 11,12,13,14: 4 byte pad
-         // 15+: a2.x
-         // = 7 byte padding
-
-         //aligned explicit-pad:
-         // 0-7:         a0
-         // 8,9,10:      a1 pad
-         // *align*
-         // 12,13,14,15: 4 byte pad
-         // 16+: a2.x
-         // = 8 byte padding
-
-         GPU_UNSIGNED_BYTE, 3, 7,
-         GPU_UNSIGNED_BYTE, uint8_t, 1, 0);
-  } else if (mode == 6) {
-    DRAW(62, // !!! Still expected to work because float pos will realign to multiple of 4
-         3, 0x210,
-         GPU_UNSIGNED_BYTE, 3, 4,
-         GPU_FLOAT, float, 1.0f, 0.0f);
-  } else if (mode == 7) {
-    DRAW(63, // !!! Still expected to work because float pos will realign to multiple of 4
-         3, 0x210,
-         GPU_UNSIGNED_BYTE, 3, 4,
+    DRAW(0x20,
+         4, 0x2D10,
+         GPU_UNSIGNED_BYTE, 3, 12,
          GPU_FLOAT, float, 1.0f, 0.0f);
   } else {
     /* Reached the end.. */
@@ -229,6 +203,7 @@ int main()
 
 		// Respond to user input
 		u32 kDown = hidKeysDown();
+		if (kDown & KEY_SELECT) break;
     bool is_pressed = kDown & KEY_START;
     static bool was_pressed = true;
     static unsigned int mode = 0;
