@@ -1,5 +1,3 @@
-; Example PICA200 vertex shader
-
 ; Uniforms
 .fvec projection[4]
 
@@ -15,34 +13,37 @@
 
 .proc main
 
-	; r0 = inpos.xy, 0.5, 1.0
-	mov r0.xy,  inpos.xy
-	mov r0.z,   myconst.z
-	mov r0.w,   myconst.y
+  ; r0 = inpos.xy, 0.5, 1.0
+  mov r0.xy,  inpos.xy
+  mov r0.z,   myconst.z
+  mov r0.w,   myconst.y
 
-	; outpos = projectionMatrix * inpos
-	dp4 outpos.x, projection[0], r0
-	dp4 outpos.y, projection[1], r0
-	dp4 outpos.z, projection[2], r0
-	dp4 outpos.w, projection[3], r0
+  ; outpos = projectionMatrix * inpos
+  dp4 outpos.x, projection[0], r0
+  dp4 outpos.y, projection[1], r0
+  dp4 outpos.z, projection[2], r0
+  dp4 outpos.w, projection[3], r0
+
+  ; r15 will be our weapon of choice to mirror outclr
+  ; (each output component has to be written exactly one or the PICA will freeze)
 
 .constf evil(0.666, 0.666, 0.666, 0.816088230524) ; evil + root of evil
-  mov outclr.xyz, evil
+  mov r15, evil
 
   mova a0, c50.x
-  mova a1, v0.z
-
   mov r1, c10
   mov r2, c20
   mov r3, c30
+  mova a1, v0.z ; we can't do this directly after the other 'mova' because it will freeze the PICA
 
   ;; WARNING: This will be searched and patched in main.c !
   ;; Just give it any unique opdesc
   nop
   mad r0.y, r1.wyzx, c40.xywz, r3.wwxz
 
-  ; Outcolor.w = 1.0
-	mov outclr.w, myconst.y
+  ; outcolor = (r15.xyz, 1.0)
+  mov r15.w, myconst.y
+  mov outclr, r15
 
-	end
+  end
 .end
