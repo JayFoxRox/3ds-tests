@@ -25,7 +25,7 @@ static C3D_Mtx projection;
 struct {
   float x, y, index;
   float r, g, b;
-} __attribute__((packed)) vertices[] = {
+} vertices[] = {
   { 200.0f, 200.0f, 1.0f, 1.0f, 0.0f, 0.0f },
   { 100.0f,  40.0f, 2.0f, 0.0f, 1.0f, 0.0f },
   { 300.0f,  40.0f, 3.0f, 0.0f, 0.0f, 1.0f }
