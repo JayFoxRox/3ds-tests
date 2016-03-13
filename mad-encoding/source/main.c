@@ -166,12 +166,12 @@ static int sceneRender(unsigned int mode)
   } else if (mode == 1) {
 
     /*
-     * mad o1.xyz, r1, c20, r3
-     * mad o1.xyz = 1 * (0, 1, 0) + 0 = (0, 1, 0) [Green]
+     * mad o1.xyz, r1, v1, r3
+     * mad o1.xyz = 1 * color + 0 = color
      */
 
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 1.0f, 1.0f, 1.0f, 1.0f); // Multiplier for C20
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, 30, 0.0f, 0.0f, 0.0f, 0.0f); // Addition to C20
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 1.0f, 1.0f, 1.0f, 1.0f); // Multiplier for V1
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 30, 0.0f, 0.0f, 0.0f, 0.0f); // Addition to V1
 
     *mad = ENC_MAD(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_V(1), ENC_IDX_NONE, ENC_SRC_R(3), opdesc_idx);
     *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
@@ -210,6 +210,54 @@ static int sceneRender(unsigned int mode)
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 20, 0.2f, 0.2f, 0.2f, 0.2f);
 
     *mad = ENC_MADI(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_R(2), ENC_SRC_C(30), ENC_IDX_A(1), opdesc_idx);
+    *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3));
+
+  } else if (mode == 4) {
+
+    /*
+     * madi o1.xyz, r1, v1, r3
+     * madi o1.xyz = 1 * color + 0 = color
+     */
+
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 1.0f, 1.0f, 1.0f, 1.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 30, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    *mad = ENC_MADI(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_V(1), ENC_SRC_R(3), ENC_IDX_NONE, opdesc_idx);
+    *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3));
+
+  } else if (mode == 5) {
+
+    /*
+     * madi o1.xyz, v1, r2, r3
+     * madi o1.xyz = color * 1 + 0 = color
+     */
+
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 20, 1.0f, 1.0f, 1.0f, 1.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 30, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    *mad = ENC_MADI(ENC_DST_O(1), ENC_SRC_V(1), ENC_SRC_R(2), ENC_SRC_R(3), ENC_IDX_NONE, opdesc_idx);
+    *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3));
+
+  } else if (mode == 6) {
+
+    /*
+     * madi o1.xyz, r1, r2, v1
+     * madi o1.xyz = 0.2 * 0 + color = color
+     */
+
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 0.2f, 0.2f, 0.2f, 0.2f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 20, 0.0f, 0.0f, 0.0f, 0.0f);
+
+    *mad = ENC_MADI(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_R(2), ENC_SRC_V(1), ENC_IDX_NONE, opdesc_idx);
     *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
                          false, ENC_SW(0,1,2,3),
                          false, ENC_SW(0,1,2,3),
