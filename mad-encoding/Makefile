@@ -170,7 +170,7 @@ $(OUTPUT).elf	:	$(OFILES)
 #---------------------------------------------------------------------------------
 define shader-as
 	$(eval CURBIN := $(patsubst %.shbin.o,%.shbin,$(notdir $@)))
-  ~/Data/Projects/picasso/picasso -o $(CURBIN) $1
+	picasso -o $(CURBIN) $1
 	bin2s $(CURBIN) | $(AS) -o $@
 	echo "extern const u8" `(echo $(CURBIN) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"_end[];" > `(echo $(CURBIN) | tr . _)`.h
 	echo "extern const u8" `(echo $(CURBIN) | sed -e 's/^\([0-9]\)/_\1/' | tr . _)`"[];" >> `(echo $(CURBIN) | tr . _)`.h
