@@ -4,10 +4,7 @@
 .fvec projection[4]
 
 ; Constants
-.constf myconst(0.0, 1.0, -1.0, 0.1)
-.constf myconst2(0.5, 0.0, 0.0, 0.0)
-.alias  zeros myconst.xxxx ; Vector full of zeros
-.alias  ones  myconst.yyyy ; Vector full of ones
+.constf myconst(0.0, 1.0, 0.5, 0.0)
 
 ; Outputs
 .out outpos position
@@ -20,7 +17,7 @@
 
 	; r0 = inpos.xy, 0.5, 1.0
 	mov r0.xy,  inpos.xy
-	mov r0.z,   myconst2.x
+	mov r0.z,   myconst.z
 	mov r0.w,   myconst.y
 
 	; outpos = projectionMatrix * inpos
@@ -32,7 +29,6 @@
 .constf evil(0.666, 0.666, 0.666, 0.816088230524) ; evil + root of evil
   mov outclr.xyz, evil
 
-.consti off(1,2,3,4)
   mova a0, c50.x
   mova a1, v0.z
 
@@ -40,14 +36,10 @@
   mov r2, c20
   mov r3, c30
 
-;;mov o1.xyz, c20[a1]
-
   ;; WARNING: This will be searched and patched in main.c !
   ;; Just give it any unique opdesc
   nop
   mad r0.y, r1.wyzx, c40.xywz, r3.wwxz
-
-  done:
 
   ; Outcolor.w = 1.0
 	mov outclr.w, myconst.y

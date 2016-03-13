@@ -24,10 +24,11 @@ static C3D_Mtx projection;
 
 struct {
   float x, y, index;
+  float r, g, b;
 } vertices[] = {
-  { 200.0f, 200.0f, 1.0f },
-  { 100.0f,  40.0f, 2.0f },
-  { 300.0f,  40.0f, 3.0f }
+  { 200.0f, 200.0f, 1.0f, 1.0f, 0.0f, 0.0f },
+  { 100.0f,  40.0f, 2.0f, 0.0f, 1.0f, 0.0f },
+  { 300.0f,  40.0f, 3.0f, 0.0f, 0.0f, 1.0f }
 };
 
 static void* vbo_data;
@@ -67,7 +68,8 @@ static u32 opdesc_idx;
 
 #define ENC_MAD(dst, src1, src2, idx, src3, opdesc_idx) \
   ((0x7 << 29) | ((dst) << 24) | ((idx) << 22) | ((src1) << 17) | ((src2) << 10) | ((src3) << 5) | (opdesc_idx))
-#define ENC_MADI(opdesc_idx) (0x6 << 29)
+#define ENC_MADI(dst, src1, src2, src3, idx, opdesc_idx) \
+  ((0x6 << 29) | ((dst) << 24) | ((idx) << 22) | ((src1) << 17) | ((src2) << 12) | ((src3) << 5) | (opdesc_idx))
 
 static void sceneInit(void)
 {
@@ -112,15 +114,18 @@ void draw(void) {
   // Configure buffers
   C3D_BufInfo* bufInfo = C3D_GetBufInfo();
   BufInfo_Init(bufInfo);
-  BufInfo_Add(bufInfo, vbo_data, sizeof(vertices[0]), 1, 0x0);
+  BufInfo_Add(bufInfo, vbo_data, sizeof(vertices[0]), 2, 0x10);
 
   // Configure attributes for use with the vertex shader
   C3D_AttrInfo* attrInfo = C3D_GetAttrInfo();
   AttrInfo_Init(attrInfo);
   AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 3); // v0=x,y,index
+  AttrInfo_AddLoader(attrInfo, 1, GPU_FLOAT, 3); // v1=r,g,b
 
   // Update the uniforms
   C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
+
+  C3D_UpdateUniforms(GPU_VERTEX_SHADER);
 
   // Draw the VBO
   C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
@@ -136,12 +141,21 @@ static int sceneRender(unsigned int mode)
   // r2 = c20
   // r3 = c30
 
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, 11, 1.0f, 0.0f, 0.0f, 23.1f); // R
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, 12, 0.0f, 1.0f, 0.0f, 23.2f); // G
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, 13, 0.0f, 0.0f, 1.0f, 23.4f); // B
+
   C3D_FVUnifSet(GPU_VERTEX_SHADER, 21, 1.0f, 0.0f, 0.0f, 23.1f); // R
   C3D_FVUnifSet(GPU_VERTEX_SHADER, 22, 0.0f, 1.0f, 0.0f, 23.2f); // G
   C3D_FVUnifSet(GPU_VERTEX_SHADER, 23, 0.0f, 0.0f, 1.0f, 23.4f); // B
 
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, 31, 1.0f, 0.0f, 0.0f, 23.1f); // R
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, 32, 0.0f, 1.0f, 0.0f, 23.2f); // G
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, 33, 0.0f, 0.0f, 1.0f, 23.4f); // B
+
   if (mode == 0) {
-    // *mad = 0x84000000; // nop = expecting greyish triangle
+
+    /* Direct lookup from c21-c23 using relative addressed mov */
 
     *mad = 0x4c334000 | opdesc_idx; // mov o1, c20[a1]
     *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
@@ -151,13 +165,15 @@ static int sceneRender(unsigned int mode)
 
   } else if (mode == 1) {
 
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, 50, 10, 0, 0, 0); // a0, 0, 0, 0
+    /*
+     * mad o1.xyz, r1, c20, r3
+     * mad o1.xyz = 1 * (0, 1, 0) + 0 = (0, 1, 0) [Green]
+     */
 
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 1.0f, 1.0f, 1.0f, 1.0f); // Multiplier for C20
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, 20, 0.0f, 1.0f, 0.0f, 0.0f); // Make this green..
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 30, 0.0f, 0.0f, 0.0f, 0.0f); // Addition to C20
 
-    *mad = ENC_MAD(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_C(20), ENC_IDX_NONE, ENC_SRC_R(3), opdesc_idx);
+    *mad = ENC_MAD(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_V(1), ENC_IDX_NONE, ENC_SRC_R(3), opdesc_idx);
     *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
                          false, ENC_SW(0,1,2,3),
                          false, ENC_SW(0,1,2,3),
@@ -165,15 +181,35 @@ static int sceneRender(unsigned int mode)
 
   } else if (mode == 2) {
 
+    /*
+     * mad o1.xyz, r1, c20[a1], r3
+     * mad o1.xyz = 1 * color + 0 = color
+     */
+
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 50, 10, 0, 0, 0); // a0, 0, 0, 0
 
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 1.0f, 1.0f, 1.0f, 1.0f); // Multiplier for C20
-
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, 20, 20.0f, 21.0f, 22.0f, 23.0f);
-
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 30, 0.0f, 0.0f, 0.0f, 0.0f); // Addition to C20
 
     *mad = ENC_MAD(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_C(20), ENC_IDX_A(1), ENC_SRC_R(3), opdesc_idx);
+    *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3),
+                         false, ENC_SW(0,1,2,3));
+
+  } else if (mode == 3) {
+
+    /*
+     * madi o1.xyz, r1, r2, c30[a1]
+     * madi o1.xyz = 0 * 0.2 + color = color
+     */
+
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 50, 10, 0, 0, 0); // a0, 0, 0, 0
+
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 0.0f, 0.0f, 0.0f, 0.0f);
+    C3D_FVUnifSet(GPU_VERTEX_SHADER, 20, 0.2f, 0.2f, 0.2f, 0.2f);
+
+    *mad = ENC_MADI(ENC_DST_O(1), ENC_SRC_R(1), ENC_SRC_R(2), ENC_SRC_C(30), ENC_IDX_A(1), opdesc_idx);
     *opdesc = ENC_OPDESC(ENC_MASK(true, true, true, false),
                          false, ENC_SW(0,1,2,3),
                          false, ENC_SW(0,1,2,3),
