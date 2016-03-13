@@ -25,7 +25,7 @@ static C3D_Mtx projection;
 struct {
   float x, y, index;
   float r, g, b;
-} vertices[] = {
+} __attribute__((packed)) vertices[] = {
   { 200.0f, 200.0f, 1.0f, 1.0f, 0.0f, 0.0f },
   { 100.0f,  40.0f, 2.0f, 0.0f, 1.0f, 0.0f },
   { 300.0f,  40.0f, 3.0f, 0.0f, 0.0f, 1.0f }
@@ -53,18 +53,6 @@ static u32 opdesc_idx;
 
 #define ENC_IDX_NONE 0
 #define ENC_IDX_A(i) ((i)+1)
-
-/*
-11110001100011101001111000100101
-                           00101 desc = okay
-                      10001 = src1 = r1
-               0100111 = src2 = c7
-        1000111 src3 bug = c39
-          00111 src3 = v7
-        10 = src2 offset = a0.y
-   10001 dst = okay
-111 = mad = okay
-*/
 
 #define ENC_MAD(dst, src1, src2, idx, src3, opdesc_idx) \
   ((0x7 << 29) | ((dst) << 24) | ((idx) << 22) | ((src1) << 17) | ((src2) << 10) | ((src3) << 5) | (opdesc_idx))
@@ -100,17 +88,6 @@ static void sceneInit(void)
   vbo_data = linearAlloc(sizeof(vertices));
   memcpy(vbo_data, vertices, sizeof(vertices));
 
-  // Configure the first fragment shading substage to just pass through the vertex color
-  // See https://www.opengl.org/sdk/docs/man2/xhtml/glTexEnv.xml for more insight
-  C3D_TexEnv* env = C3D_GetTexEnv(0);
-  C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
-  C3D_TexEnvOp(env, C3D_Both, 0, 0, 0);
-  C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
-}
-
-
-void draw(void) {
-
   // Configure buffers
   C3D_BufInfo* bufInfo = C3D_GetBufInfo();
   BufInfo_Init(bufInfo);
@@ -122,13 +99,12 @@ void draw(void) {
   AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 3); // v0=x,y,index
   AttrInfo_AddLoader(attrInfo, 1, GPU_FLOAT, 3); // v1=r,g,b
 
-  // Update the uniforms
-  C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
-
-  C3D_UpdateUniforms(GPU_VERTEX_SHADER);
-
-  // Draw the VBO
-  C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
+  // Configure the first fragment shading substage to just pass through the vertex color
+  // See https://www.opengl.org/sdk/docs/man2/xhtml/glTexEnv.xml for more insight
+  C3D_TexEnv* env = C3D_GetTexEnv(0);
+  C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
+  C3D_TexEnvOp(env, C3D_Both, 0, 0, 0);
+  C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
 }
 
 static int sceneRender(unsigned int mode)
@@ -186,8 +162,6 @@ static int sceneRender(unsigned int mode)
      * mad o1.xyz = 1 * color + 0 = color
      */
 
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, 50, 10, 0, 0, 0); // a0, 0, 0, 0
-
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 1.0f, 1.0f, 1.0f, 1.0f); // Multiplier for C20
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 30, 0.0f, 0.0f, 0.0f, 0.0f); // Addition to C20
 
@@ -203,8 +177,6 @@ static int sceneRender(unsigned int mode)
      * madi o1.xyz, r1, r2, c30[a1]
      * madi o1.xyz = 0 * 0.2 + color = color
      */
-
-    C3D_FVUnifSet(GPU_VERTEX_SHADER, 50, 10, 0, 0, 0); // a0, 0, 0, 0
 
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 10, 0.0f, 0.0f, 0.0f, 0.0f);
     C3D_FVUnifSet(GPU_VERTEX_SHADER, 20, 0.2f, 0.2f, 0.2f, 0.2f);
@@ -270,12 +242,19 @@ static int sceneRender(unsigned int mode)
   }
 
   shaderProgramSetVsh(&program, &vshader_dvlb->DVLE[0]);
+
+  // Update the uniforms
+  uLoc_projection = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
+  C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
+
+  // Upload the uniforms which were previously set
+  C3D_UpdateUniforms(GPU_VERTEX_SHADER);
+
+  // This will also upload the constants defined in the shader code
   shaderProgramUse(&program);
 
-  // Get the location of the uniforms
-  uLoc_projection = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
-
-  draw();
+  // Draw the VBO
+  C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
 
   return mode;
 }
