@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <stdlib.h>
 #include "vshader_shbin.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
@@ -62,8 +63,12 @@ static u32 opdesc_idx;
 static void sceneInit(void)
 {
 
+  // Copy shbin to writable memory
+  void* vshader_shbin_rw = malloc(vshader_shbin_size);
+  memcpy(vshader_shbin_rw, vshader_shbin, vshader_shbin_size);
+
   // Load the vertex shader, create a shader program and bind it
-  vshader_dvlb = DVLB_ParseFile((u32*)vshader_shbin, vshader_shbin_size);
+  vshader_dvlb = DVLB_ParseFile((u32*)vshader_shbin_rw, vshader_shbin_size);
   shaderProgramInit(&program);
   
   // Find the placeholder MAD
