@@ -25,6 +25,9 @@ size_t vbo_size = 1 * 1024; // 1 KiB should be plenty..
 static unsigned int base_offset = 0;
 static unsigned int passed_base_offset = 0;
 
+static int stride_offset = 0;
+static int passed_stride_offset = 0;
+
 static void sceneInit(void)
 {
   // Load the vertex shader, create a shader program and bind it
@@ -92,7 +95,7 @@ static int sceneRender(unsigned int mode)
     const type gpu_zero = (zero); \
     memset(vbo_data, 0x00, vbo_size); \
     for(unsigned int i = 0; i < 3; i++) { \
-      uintptr_t base_buffer = (uintptr_t)vbo_data + base_offset + (stride) * i; \
+      uintptr_t base_buffer = (uintptr_t)vbo_data + base_offset + ((stride) + stride_offset) * i; \
       /* Write position */ \
       base_buffer += safe_copy((u8*)base_buffer, (const u8*)&x[i], sizeof(float)); \
       base_buffer += safe_copy((u8*)base_buffer, (const u8*)&y[i], sizeof(float)); \
@@ -103,7 +106,7 @@ static int sceneRender(unsigned int mode)
         base_buffer += safe_copy((u8*)base_buffer, (const u8*)((j == i) ? &gpu_one : &gpu_zero), sizeof(type)); \
       } \
     } \
-    draw(stride, attrib_count, permutation, pad_gpu_type, pad_count, gpu_type); \
+    draw(stride + passed_stride_offset, attrib_count, permutation, pad_gpu_type, pad_count, gpu_type); \
   }
 
   if (mode == 0) {
@@ -170,6 +173,32 @@ static int sceneRender(unsigned int mode)
          4, 0x2D10,
          GPU_UNSIGNED_BYTE, 3, 12,
          GPU_FLOAT, float, 1.0f, 0.0f);
+  } else if (mode == 6) {
+
+    // Checks wether padding attributes will be aligned to 2 byte, or 4 byte offsets
+
+    DRAW(0x1C,
+         5, 0x2C110, // a0, a1, a1, 4 byte pad, a2
+
+         //unaligned:
+         // 0-7:         a0
+         // 8,9,10:      a1 pad
+         // 11,12,13:    a1 pad
+         // 14,15,16,17: 4 byte pad
+         // 18+: a2.x
+         // = 10 byte padding
+
+         //aligned:
+         // 0-7:         a0
+         // 8,9,10:      a1 pad
+         // 11,12,13:    a1 pad
+         // *align*
+         // 16,17,18,19: 4 byte pad
+         // 20+: a2.x
+         // = 12 byte padding
+
+         GPU_UNSIGNED_BYTE, 3, 12,
+         GPU_SHORT, int16_t, 1, 0);
   } else {
     /* Reached the end.. */
     printf("Mode %d not found!\nUsing mode 0\n", mode);
@@ -248,6 +277,53 @@ int main()
         passed_base_offset += inc;
         passed_base_offset %= 16;
         printf("Switched to PASSED base offset %d!\n", passed_base_offset);
+      }
+      was_pressed = is_pressed;
+    }
+
+#if 0
+
+    // This will freeze the PICA!
+    // = stride has to match the vertex size!
+
+    {
+      bool is_pressed = kDown & KEY_UP;
+      static bool was_pressed = true;
+      if (was_pressed != is_pressed && is_pressed) {
+        passed_stride_offset += inc;
+        printf("Switched to PASSED stride offset %d!\n", passed_stride_offset);
+      }
+      was_pressed = is_pressed;
+    }
+
+    {
+      bool is_pressed = kDown & KEY_DOWN;
+      static bool was_pressed = true;
+      if (was_pressed != is_pressed && is_pressed) {
+        passed_stride_offset -= inc;
+        printf("Switched to PASSED stride offset %d!\n", passed_stride_offset);
+      }
+      was_pressed = is_pressed;
+    }
+
+#endif
+
+    {
+      bool is_pressed = kDown & KEY_LEFT;
+      static bool was_pressed = true;
+      if (was_pressed != is_pressed && is_pressed) {
+        stride_offset -= inc;
+        printf("Switched to stride offset %d!\n", stride_offset);
+      }
+      was_pressed = is_pressed;
+    }
+
+    {
+      bool is_pressed = kDown & KEY_RIGHT;
+      static bool was_pressed = true;
+      if (was_pressed != is_pressed && is_pressed) {
+        stride_offset += inc;
+        printf("Switched to stride offset %d!\n", stride_offset);
       }
       was_pressed = is_pressed;
     }
