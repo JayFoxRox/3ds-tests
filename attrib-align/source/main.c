@@ -23,6 +23,7 @@ static void* vbo_data;
 size_t vbo_size = 1 * 1024; // 1 KiB should be plenty..
 
 static unsigned int base_offset = 0;
+static unsigned int passed_base_offset = 0;
 
 static void sceneInit(void)
 {
@@ -55,7 +56,7 @@ void draw(size_t stride, unsigned int attrib_count, unsigned int permutation, in
   // Configure buffers
   C3D_BufInfo* bufInfo = C3D_GetBufInfo();
   BufInfo_Init(bufInfo);
-  BufInfo_Add(bufInfo, (const void*)((uintptr_t)vbo_data + base_offset), stride, attrib_count, permutation);
+  BufInfo_Add(bufInfo, (const void*)((uintptr_t)vbo_data + passed_base_offset), stride, attrib_count, permutation);
 
   // Configure attributes for use with the vertex shader
   C3D_AttrInfo* attrInfo = C3D_GetAttrInfo();
@@ -71,26 +72,36 @@ void draw(size_t stride, unsigned int attrib_count, unsigned int permutation, in
   C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
 }
 
+static size_t safe_copy(u8* dest, const u8* src, size_t size) {
+  size_t written = 0;
+  while(size--) {
+    *dest++ = *src++;
+    written++;
+  }
+  return written;
+}
+
 static int sceneRender(unsigned int mode)
 {
 
 #define DRAW(stride, attrib_count, permutation, pad_gpu_type, pad_count, pad_skip, gpu_type, type, one, zero) \
   { \
-    float x[] = {200.0f, 100.0f, 300.0f}; \
-    float y[] = {200.0f,  40.0f,  40.0f}; \
+    const float x[] = {200.0f, 100.0f, 300.0f}; \
+    const float y[] = {200.0f,  40.0f,  40.0f}; \
+    const type gpu_one = (one); \
+    const type gpu_zero = (zero); \
     memset(vbo_data, 0x00, vbo_size); \
     for(unsigned int i = 0; i < 3; i++) { \
       uintptr_t base_buffer = (uintptr_t)vbo_data + base_offset + (stride) * i; \
-      uintptr_t position_buffer = base_buffer; \
-      ((float*)position_buffer)[0] = x[i]; \
-      ((float*)position_buffer)[1] = y[i]; \
-      base_buffer += 8; \
+      /* Write position */ \
+      base_buffer += safe_copy((u8*)base_buffer, (const u8*)&x[i], sizeof(float)); \
+      base_buffer += safe_copy((u8*)base_buffer, (const u8*)&y[i], sizeof(float)); \
+      /* Add expected padding */ \
       base_buffer += (pad_skip); \
-      uintptr_t color_buffer = base_buffer; \
+      /* Add color (which is what we are trying to have in the right spot + visualize) */ \
       for(unsigned int j = 0; j < 3; j++) { \
-        ((type*)color_buffer)[j] = (j == i) ? (one) : (zero); \
+        base_buffer += safe_copy((u8*)base_buffer, (const u8*)((j == i) ? &gpu_one : &gpu_zero), sizeof(type)); \
       } \
-      base_buffer += sizeof(type) * 3; \
     } \
     draw(stride, attrib_count, permutation, pad_gpu_type, pad_count, gpu_type); \
   }
@@ -215,13 +226,28 @@ int main()
       was_pressed = is_pressed;
     }
 
+    int inc = 1;
+    if (kDown & KEY_Y) { inc *= 2; }
+    if (kDown & KEY_X) { inc *= 4; }
+
     {
       bool is_pressed = kDown & KEY_A;
       static bool was_pressed = true;
       if (was_pressed != is_pressed && is_pressed) {
-        base_offset++;
+        base_offset += inc;
         base_offset %= 16;
         printf("Switched to base offset %d!\n", base_offset);
+      }
+      was_pressed = is_pressed;
+    }
+
+    {
+      bool is_pressed = kDown & KEY_B;
+      static bool was_pressed = true;
+      if (was_pressed != is_pressed && is_pressed) {
+        passed_base_offset += inc;
+        passed_base_offset %= 16;
+        printf("Switched to PASSED base offset %d!\n", passed_base_offset);
       }
       was_pressed = is_pressed;
     }
