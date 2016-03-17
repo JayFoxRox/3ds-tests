@@ -22,6 +22,8 @@ static C3D_Mtx projection;
 static void* vbo_data;
 size_t vbo_size = 1 * 1024; // 1 KiB should be plenty..
 
+static unsigned int base_offset = 0;
+
 static void sceneInit(void)
 {
   // Load the vertex shader, create a shader program and bind it
@@ -53,7 +55,7 @@ void draw(size_t stride, unsigned int attrib_count, unsigned int permutation, in
   // Configure buffers
   C3D_BufInfo* bufInfo = C3D_GetBufInfo();
   BufInfo_Init(bufInfo);
-  BufInfo_Add(bufInfo, vbo_data, stride, attrib_count, permutation);
+  BufInfo_Add(bufInfo, (const void*)((uintptr_t)vbo_data + base_offset), stride, attrib_count, permutation);
 
   // Configure attributes for use with the vertex shader
   C3D_AttrInfo* attrInfo = C3D_GetAttrInfo();
@@ -78,7 +80,7 @@ static int sceneRender(unsigned int mode)
     float y[] = {200.0f,  40.0f,  40.0f}; \
     memset(vbo_data, 0x00, vbo_size); \
     for(unsigned int i = 0; i < 3; i++) { \
-      uintptr_t base_buffer = (uintptr_t)vbo_data + (stride) * i; \
+      uintptr_t base_buffer = (uintptr_t)vbo_data + base_offset + (stride) * i; \
       uintptr_t position_buffer = base_buffer; \
       ((float*)position_buffer)[0] = x[i]; \
       ((float*)position_buffer)[1] = y[i]; \
@@ -201,14 +203,28 @@ int main()
     // Respond to user input
     u32 kDown = hidKeysDown();
     if (kDown & KEY_SELECT) break;
-    bool is_pressed = kDown & KEY_START;
-    static bool was_pressed = true;
+
     static unsigned int mode = 0;
-    if (was_pressed != is_pressed && is_pressed) {
-      mode++;
-      printf("Switched to mode %d!\n", mode);
+    {
+      bool is_pressed = kDown & KEY_START;
+      static bool was_pressed = true;
+      if (was_pressed != is_pressed && is_pressed) {
+        mode++;
+        printf("Switched to mode %d!\n", mode);
+      }
+      was_pressed = is_pressed;
     }
-    was_pressed = is_pressed;
+
+    {
+      bool is_pressed = kDown & KEY_A;
+      static bool was_pressed = true;
+      if (was_pressed != is_pressed && is_pressed) {
+        base_offset++;
+        base_offset %= 16;
+        printf("Switched to base offset %d!\n", base_offset);
+      }
+      was_pressed = is_pressed;
+    }
 
     // Render the scene
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
