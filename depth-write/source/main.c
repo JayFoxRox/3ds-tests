@@ -1,3 +1,5 @@
+//FIXME: Needs w-buffering (0x6D activates it)
+
 #include <3ds.h>
 #include <citro3d.h>
 #include <string.h>
