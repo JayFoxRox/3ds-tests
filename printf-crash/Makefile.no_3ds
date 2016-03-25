@@ -1,0 +1,2 @@
+all:
+	g++ source/dtoa_netlib.c source/main.cpp -D NO_3DS -g -O0
