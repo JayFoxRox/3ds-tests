@@ -1,31 +1,25 @@
-//FIXME: Needs w-buffering (0x6D activates it)
+#include "../../base.inl"
 
-#include <3ds.h>
-#include <citro3d.h>
-#include <string.h>
-#include <stdio.h>
-#include <inttypes.h>
-#include <stdlib.h>
-#include "vshader_shbin.h"
+bool w_buffer = false;
+float depth_scale = 1.0f;
+float depth_offset = 0.0f;
+float vertex_z = 1.0f;
+float vertex_w = 1.0f;
 
-#include "../../morton.h"
-
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
-
-#define CLEAR_COLOR 0x68B0D8FF
-
-#define DISPLAY_TRANSFER_FLAGS \
-  (GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
-  GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) | GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) | \
-  GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO))
-
-static C3D_RenderTarget* target;
+Selection selections[] = {
+  { "W-Buffer", boolModify, boolValue, &w_buffer },
+  { "Depth Scale", floatModify, floatValue, &depth_scale },
+  { "Depth Offset", floatModify, floatValue, &depth_offset },
+  { "Vertex Z", floatModify, floatValue, &vertex_z },
+  { "Vertex W", floatModify, floatValue, &vertex_w }
+};
+const unsigned int selection_count = ARRAY_SIZE(selections);
 
 static DVLB_s* vshader_dvlb;
 
 static shaderProgram_s program;
 
-static int uLoc_depth;
+static int uLoc_vertex;
 static int uLoc_projection;
 static C3D_Mtx projection;
 
@@ -33,15 +27,14 @@ struct {
   float x, y;
   float r, g, b;
 } vertices[] = {
-  { 200.0f, 200.0f, 1.0f, 0.0f, 0.0f },
-  { 100.0f,  40.0f, 0.0f, 1.0f, 0.0f },
-  { 300.0f,  40.0f, 0.0f, 0.0f, 1.0f }
+  {    0.0f,   80.0f, 1.0f, 0.0f, 0.0f },
+  { -100.0f,  -80.0f, 0.0f, 1.0f, 0.0f },
+  { +100.0f,  -80.0f, 0.0f, 0.0f, 1.0f }
 };
 
 static void* vbo_data;
 
-static void sceneInit(void)
-{
+void initialize(void) {
 
   // Load the vertex shader, create a shader program and bind it
   vshader_dvlb = DVLB_ParseFile((u32*)vshader_shbin, vshader_shbin_size);
@@ -50,11 +43,11 @@ static void sceneInit(void)
   C3D_BindProgram(&program);
   
   // Get the location of the uniforms
-  uLoc_depth = shaderInstanceGetUniformLocation(program.vertexShader, "depth");
+  uLoc_vertex = shaderInstanceGetUniformLocation(program.vertexShader, "vertex");
   uLoc_projection = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
 
   // Compute the projection matrix
-  Mtx_OrthoTilt(&projection, 0.0, 400.0, 0.0, 240.0, 0.0, 1.0);
+  Mtx_OrthoTilt(&projection, -200.0, 200.0, -120.0, 120.0, 0.0, 1.0);
 
   // Update the uniforms
   C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
@@ -82,11 +75,38 @@ static void sceneInit(void)
   C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
 }
 
-void draw(void) {
-  // Draw the VBO
-  C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
+void update(void) {
+
+  // Coordinate system has been corrected to reflect actual display orientation
+  u32 raw_buffer = *(u32*)get_depth(200, 120);
+  uint32_t raw_result = raw_buffer & 0xFFFFFF;
+  float f_result = raw_result / (float)0xFFFFFF;
+
+  printf("Last frame depth: 0x%06" PRIx32 " = %f", raw_result, f_result);
+
 }
 
+void draw(void) {
+
+  clear(C3D_CLEAR_ALL, CLEAR_COLOR, 0);
+
+  // FIXME: Turn on depth testing etc
+
+#if 1
+  // Configure depth mapping
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
+	GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
+	GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
+#endif
+
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, 0.0f, 0.0f, vertex_z, vertex_w); // x = depth
+
+  // Draw the VBO
+  C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
+
+}
+
+#if 0
 static int sceneRender(unsigned int mode)
 {
 
@@ -199,53 +219,4 @@ static void sceneExit(void)
   shaderProgramFree(&program);
   DVLB_Free(vshader_dvlb);
 }
-
-int main()
-{
-  // Initialize graphics
-  gfxInitDefault();
-
-  consoleInit(GFX_BOTTOM, NULL);
-
-  C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
-
-  // Initialize the render target
-  target = C3D_RenderTargetCreate(240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
-  C3D_RenderTargetSetClear(target, C3D_CLEAR_ALL, CLEAR_COLOR, 0);
-  C3D_RenderTargetSetOutput(target, GFX_TOP, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
-
-  // Initialize the scene
-  sceneInit();
-
-  // Main loop
-  while (aptMainLoop())
-  {
-    hidScanInput();
-
-    // Respond to user input
-    u32 kDown = hidKeysDown();
-    if (kDown & KEY_SELECT) break;
-    bool is_pressed = kDown & KEY_START;
-    static bool was_pressed = true;
-    static unsigned int mode = 0;
-    if (was_pressed != is_pressed && is_pressed) {
-      mode++;
-      printf("Switched to mode %d!\n", mode);
-    }
-    was_pressed = is_pressed;
-
-    // Render the scene
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-      C3D_FrameDrawOn(target);
-      mode = sceneRender(mode);
-    C3D_FrameEnd(0);
-  }
-
-  // Deinitialize the scene
-  sceneExit();
-
-  // Deinitialize graphics
-  C3D_Fini();
-  gfxExit();
-  return 0;
-}
+#endif
