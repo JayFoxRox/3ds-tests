@@ -3,7 +3,7 @@
 bool w_buffer = false;
 float depth_scale = 1.0f;
 float depth_offset = 0.0f;
-float vertex_z = 1.0f;
+float vertex_z = -0.5f;
 float vertex_w = 1.0f;
 
 Selection selections[] = {
@@ -82,21 +82,24 @@ void update(void) {
   uint32_t raw_result = raw_buffer & 0xFFFFFF;
   float f_result = raw_result / (float)0xFFFFFF;
 
-  printf("Last frame depth: 0x%06" PRIx32 " = %f", raw_result, f_result);
+  printf("Last frame depth: 0x%06" PRIx32 " = %f\n", raw_result, f_result);
+  printf("\n");
+  if (w_buffer) {
+    printf("W-Buffer: w*scale+offset = %.3f\n", vertex_w * depth_scale + depth_offset);
+  } else {
+    printf("Z-Buffer: z/w*scale+offset = %.3f\n", vertex_z / vertex_w * depth_scale + depth_offset);
+  }
 
 }
 
 void draw(void) {
-
-  clear(C3D_CLEAR_ALL, CLEAR_COLOR, 0);
-
   // FIXME: Turn on depth testing etc
 
 #if 1
   // Configure depth mapping
   GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
-	GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
-	GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
 #endif
 
   C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, 0.0f, 0.0f, vertex_z, vertex_w); // x = depth
@@ -133,7 +136,7 @@ static int sceneRender(unsigned int mode)
 
   } else if (mode == 1) {
 
-  	C3D_DepthMap(-1.0f, 0.0f);
+    C3D_DepthMap(-1.0f, 0.0f);
     C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_depth, 0.001f, 0.0f, 0.0f, 0.0f); // x = depth
     draw();
     expected = 0.001f;
@@ -168,7 +171,7 @@ static int sceneRender(unsigned int mode)
   C3D_FrameEnd(0);
 
   // This is necessary (citra only maybe?), probably because C3D waits for the new frame too.. or something
-	gspWaitForVBlank();
+  gspWaitForVBlank();
 
   // Get depth in center of screen (240x400, 32bpp FB)
   uint8_t* buffer = (u8*)rb->depthBuf.data;

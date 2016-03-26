@@ -11,6 +11,9 @@
 
 #include "../../morton.h"
 
+char out_buffer[32*1024]; // 32kB buffer..
+#define printf(...) sprintf(&out_buffer[strlen(out_buffer)], __VA_ARGS__);
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 #define CLEAR_COLOR 0x68B0D8FF
@@ -61,7 +64,7 @@ void floatModify(void* data, int step) {
 }
 
 
-static C3D_RenderTarget* target;
+static C3D_RenderBuf rb;
 
 static void sceneExit(void)
 {
@@ -77,20 +80,18 @@ static void sceneExit(void)
 
 void* get_depth(unsigned int x, unsigned int y) {
 
-  C3D_RenderBuf* rb = &target->renderBuf;
-
   // Get depth in center of screen (240x400, 32bpp FB)
-  uint8_t* buffer = (u8*)rb->depthBuf.data;
+  uint8_t* buffer = (u8*)rb.depthBuf.data;
   int pixel_offset = GetPixelOffset(y, x, 240, 400, 4);
   return &buffer[pixel_offset];
 }
 
 void clear(u32 mask, u32 color, u32 zeta) {
-  C3D_FrameEnd(0);
-  target->drawOk = true; // Some hack..
-  C3D_RenderTargetSetClear(target, mask, color, zeta);
-  C3D_FrameBegin(C3D_FRAME_NONBLOCK);
-  C3D_FrameDrawOn(target);
+#if 0
+    C3D_Flush();
+    C3D_RenderBufTransfer(&rb, (u32*)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL), DISPLAY_TRANSFER_FLAGS);
+    C3D_RenderBufClear(&rb);
+#endif
 }
 
 int main() {
@@ -101,10 +102,11 @@ int main() {
 
   C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
 
-  // Initialize the render target
-  target = C3D_RenderTargetCreate(240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
-  C3D_RenderTargetSetClear(target, 0, 0, 0);
-  C3D_RenderTargetSetOutput(target, GFX_TOP, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
+  C3D_RenderBufInit(&rb, 240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+  rb.clearColor = CLEAR_COLOR;
+  rb.clearDepth = 0x000000;
+  C3D_RenderBufClear(&rb);
+  C3D_RenderBufBind(&rb);
 
   // Initialize the scene
 //  sceneInit();
@@ -144,18 +146,19 @@ int main() {
       if (kDown & KEY_DOWN) { selection_index++; }
     }
 
+    // Clear console and its buffer
+    sprintf(out_buffer, "\x1b[2J\nBuilt on %s / %s\n\n\n", __DATE__, __TIME__);
+
     // Next we run the update handler which might fiddle with the values some more
     update();
 
-    // Now we run the draw function    
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-      C3D_FrameDrawOn(target);
+    // Now start clearing the buffer
+    C3D_RenderBufClear(&rb);
  
     // And finally we draw the menu with the values we are left with
     selection_index %= selection_count;
 
-    consoleClear();
-    printf("Step size: x%d\n\n", step_size);
+    printf("\n\nStep size: x%d\n\n", step_size);
     for (unsigned int i = 0; i < selection_count; i++) {
         Selection* selection = &selections[i];
         printf("%s%s: %s\n",
@@ -166,10 +169,18 @@ int main() {
 #endif
                selection->name, selection->valueCb(selection->data));
     }
-    printf("\n");
+
+    // Now we wait for the clear to complete and run the draw function
+    C3D_VideoSync();
 
     draw();
-    C3D_FrameEnd(0);
+
+    // Supply new data for bottom screen
+    fprintf(stdout, out_buffer);
+
+    // Submit GPU commands and transfer bottom screen
+    C3D_Flush();
+    C3D_RenderBufTransfer(&rb, (u32*)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL), DISPLAY_TRANSFER_FLAGS);
 
   }
 
