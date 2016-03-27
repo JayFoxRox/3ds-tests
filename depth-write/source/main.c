@@ -1,7 +1,7 @@
 #include "../../base.inl"
 
 bool w_buffer = false;
-float depth_scale = 1.0f;
+float depth_scale = -1.0f;
 float depth_offset = 0.0f;
 float vertex_z = -0.5f;
 float vertex_w = 1.0f;
@@ -73,6 +73,10 @@ void initialize(void) {
   C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
   C3D_TexEnvOp(env, C3D_Both, 0, 0, 0);
   C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+
+  // Disable depth test once..
+	C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
+
 }
 
 void update(void) {
@@ -82,13 +86,31 @@ void update(void) {
   uint32_t raw_result = raw_buffer & 0xFFFFFF;
   float f_result = raw_result / (float)0xFFFFFF;
 
-  printf("Last frame depth: 0x%06" PRIx32 " = %f\n", raw_result, f_result);
-  printf("\n");
+  float depth;
   if (w_buffer) {
-    printf("W-Buffer: w*scale+offset = %.3f\n", vertex_w * depth_scale + depth_offset);
+    depth = vertex_z * depth_scale + vertex_w * depth_offset;
+    printf("W-Buffer: z*scale+w*offset:  %+.3f\n", depth);
   } else {
-    printf("Z-Buffer: z/w*scale+offset = %.3f\n", vertex_z / vertex_w * depth_scale + depth_offset);
+    depth = vertex_z * depth_scale / vertex_w + depth_offset;
+    printf("Z-Buffer: z/w*scale+offset:  %+.3f\n", depth);
   }
+
+  bool z_err = (depth < 0.0f) || (depth > 1.0f);
+  bool z_clip = (vertex_z < -vertex_w) || (vertex_z > 0.0f);
+  bool w_clip = (vertex_w <= 0.0f);
+
+  printf("Z Over/Underflow:               %3s\n", z_err ? "Yes" : "No");
+  printf("Z Clip:                         %3s\n", z_clip ? "Yes" : "No");
+  printf("W Clip:                         %3s\n", w_clip ? "Yes" : "No");
+
+  bool shown = !z_clip && !w_clip && !z_err;
+
+  printf("\n\n");
+  printf("Guessing triangle shown:        %3s\n", shown ? "Yes" : "No");
+  printf("Guessed depth:               %+.3f\n", shown ? depth : 0.0f );
+  printf("\n");
+  printf("Last frame depth: 0x%06" PRIx32 " = %+.3f\n", raw_result, f_result);
+  printf("\n");
 
 }
 
