@@ -1,5 +1,7 @@
 #include "../../base.inl"
 
+bool depth_test = false;
+bool use_gequal = false;
 bool w_buffer = false;
 float depth_scale = -1.0f;
 float depth_offset = 0.0f;
@@ -7,6 +9,8 @@ float vertex_z = -0.5f;
 float vertex_w = 1.0f;
 
 Selection selections[] = {
+  { "Depth test", boolModify, boolValue, &depth_test },
+  { "GEQUAL", boolModify, boolValue, &use_gequal },
   { "W-Buffer", boolModify, boolValue, &w_buffer },
   { "Depth Scale", floatModify, floatValue, &depth_scale },
   { "Depth Offset", floatModify, floatValue, &depth_offset },
@@ -74,9 +78,6 @@ void initialize(void) {
   C3D_TexEnvOp(env, C3D_Both, 0, 0, 0);
   C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
 
-  // Disable depth test once..
-	C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_ALL);
-
 }
 
 void update(void) {
@@ -86,12 +87,11 @@ void update(void) {
   uint32_t raw_result = raw_buffer & 0xFFFFFF;
   float f_result = raw_result / (float)0xFFFFFF;
 
-  float depth;
+  float depth = vertex_z * depth_scale / vertex_w + depth_offset;
   if (w_buffer) {
-    depth = vertex_z * depth_scale + vertex_w * depth_offset;
-    printf("W-Buffer: z*scale+w*offset:  %+.3f\n", depth);
+    depth *= vertex_w;
+    printf("W-Buffer: z*scale+offset*w:  %+.3f\n", depth);
   } else {
-    depth = vertex_z * depth_scale / vertex_w + depth_offset;
     printf("Z-Buffer: z/w*scale+offset:  %+.3f\n", depth);
   }
 
@@ -103,7 +103,15 @@ void update(void) {
   printf("Z Clip:                         %3s\n", z_clip ? "Yes" : "No");
   printf("W Clip:                         %3s\n", w_clip ? "Yes" : "No");
 
-  bool shown = !z_clip && !w_clip && !z_err;
+  bool shown = !z_clip && !w_clip;
+  if (depth_test) {
+      // Clip on Z overflow / underflow
+      shown = shown && !z_err;
+  } else {
+      // Clamp Z
+      if (depth < 0.0f) { depth = 0.0f; }
+      if (depth > 1.0f) { depth = 1.0f; }
+  }
 
   printf("\n\n");
   printf("Guessing triangle shown:        %3s\n", shown ? "Yes" : "No");
@@ -115,7 +123,12 @@ void update(void) {
 }
 
 void draw(void) {
-  // FIXME: Turn on depth testing etc
+
+  // WARNING: DO **NOT** USE ANY C3D STUFF, ESPECIALLY NOTHING EFFECT RELATED!
+
+  // Disable or enable depth test..
+  u32 compare_mode = use_gequal ? GPU_GEQUAL : GPU_ALWAYS;
+  GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (!!depth_test) | ((compare_mode & 7) << 4) | (GPU_WRITE_ALL << 8));
 
 #if 1
   // Configure depth mapping
