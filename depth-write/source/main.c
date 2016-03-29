@@ -1,7 +1,5 @@
 #include "../../base.inl"
 
-bool depth_test = false;
-bool use_gequal = false;
 bool w_buffer = false;
 float depth_scale = -1.0f;
 float depth_offset = 0.0f;
@@ -9,8 +7,6 @@ float vertex_z = -0.5f;
 float vertex_w = 1.0f;
 
 Selection selections[] = {
-  { "Depth test", boolModify, boolValue, &depth_test },
-  { "GEQUAL", boolModify, boolValue, &use_gequal },
   { "W-Buffer", boolModify, boolValue, &w_buffer },
   { "Depth Scale", floatModify, floatValue, &depth_scale },
   { "Depth Offset", floatModify, floatValue, &depth_offset },
@@ -95,29 +91,23 @@ void update(void) {
     printf("Z-Buffer: z/w*scale+offset:  %+.3f\n", depth);
   }
 
-  bool z_err = (depth < 0.0f) || (depth > 1.0f);
   bool z_clip = (vertex_z < -vertex_w) || (vertex_z > 0.0f);
   bool w_clip = (vertex_w <= 0.0f);
 
-  printf("Z Over/Underflow:               %3s\n", z_err ? "Yes" : "No");
   printf("Z Clip:                         %3s\n", z_clip ? "Yes" : "No");
   printf("W Clip:                         %3s\n", w_clip ? "Yes" : "No");
 
+  // Clamp depth value
+  if (depth < 0.0f) { depth = 0.0f; }
+  if (depth > 1.0f) { depth = 1.0f; }
+
   bool shown = !z_clip && !w_clip;
-  if (depth_test) {
-      // Clip on Z overflow / underflow
-      shown = shown && !z_err;
-  } else {
-      // Clamp Z
-      if (depth < 0.0f) { depth = 0.0f; }
-      if (depth > 1.0f) { depth = 1.0f; }
-  }
 
   printf("\n\n");
   printf("Guessing triangle shown:        %3s\n", shown ? "Yes" : "No");
   printf("Guessed depth:               %+.3f\n", shown ? depth : 0.0f );
   printf("\n");
-  printf("Last frame depth: 0x%06" PRIx32 " = %+.3f\n", raw_result, f_result);
+  printf("Last frame depth: 0x%06" PRIX32 " = %+.3f\n", raw_result, f_result);
   printf("\n");
 
 }
@@ -127,7 +117,8 @@ void draw(void) {
   // WARNING: DO **NOT** USE ANY C3D STUFF, ESPECIALLY NOTHING EFFECT RELATED!
 
   // Disable or enable depth test..
-  u32 compare_mode = use_gequal ? GPU_GEQUAL : GPU_ALWAYS;
+  bool depth_test = false;
+  u32 compare_mode = GPU_ALWAYS;
   GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (!!depth_test) | ((compare_mode & 7) << 4) | (GPU_WRITE_ALL << 8));
 
 #if 1

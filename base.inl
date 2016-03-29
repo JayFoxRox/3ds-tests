@@ -11,6 +11,17 @@
 
 #include "../../morton.h"
 
+
+// Add some compatibility macros
+
+#ifndef CONSOLE_RED
+#define CONSOLE_RED ""
+#endif
+
+#ifndef CONSOLE_RESET
+#define CONSOLE_RESET ""
+#endif
+
 char out_buffer[32*1024]; // 32kB buffer..
 #define printf(...) sprintf(&out_buffer[strlen(out_buffer)], __VA_ARGS__);
 
@@ -47,6 +58,34 @@ void boolModify(void* data, int step) {
   return;
 }
 
+typedef uint8_t Mask;
+
+static char* _maskValue(const void* data, char* pattern) {
+  static char buffer[32];
+  Mask value = *(const Mask*)data;
+  value &= 0xF;
+  bool x = value & (1 << 0);
+  bool y = value & (1 << 1);
+  bool z = value & (1 << 2);
+  bool w = value & (1 << 3);
+  snprintf(buffer, sizeof(buffer), "0x%X (%c%c%c%c)",
+           value,
+           x ? pattern[0] : ' ',
+           y ? pattern[1] : ' ',
+           z ? pattern[2] : ' ',
+           w ? pattern[3] : ' ');
+  return buffer;
+}
+
+char* maskValueXYZW(const void* data) { return _maskValue(data, "XYZW"); }
+char* maskValueRGBA(const void* data) { return _maskValue(data, "RGBA"); }
+
+void maskModify(void* data, int step) {
+  Mask* value = (Mask*)data;
+  *value = (*value + step) & 0xF;
+  return;
+}
+
 char* floatValue(const void* data) {
   static char buffer[32];
   const float* value = (const float*)data;
@@ -66,8 +105,7 @@ void floatModify(void* data, int step) {
 
 static C3D_RenderBuf rb;
 
-static void sceneExit(void)
-{
+static void sceneExit(void) {
 #if 0
   // Free the VBO
   linearFree(vbo_data);
@@ -79,9 +117,15 @@ static void sceneExit(void)
 }
 
 void* get_depth(unsigned int x, unsigned int y) {
-
   // Get depth in center of screen (240x400, 32bpp FB)
   uint8_t* buffer = (u8*)rb.depthBuf.data;
+  int pixel_offset = GetPixelOffset(y, x, 240, 400, 4);
+  return &buffer[pixel_offset];
+}
+
+void* get_color(unsigned int x, unsigned int y) {
+  // Get depth in center of screen (240x400, 32bpp FB)
+  uint8_t* buffer = (u8*)rb.colorBuf.data;
   int pixel_offset = GetPixelOffset(y, x, 240, 400, 4);
   return &buffer[pixel_offset];
 }
@@ -127,7 +171,6 @@ int main() {
     static unsigned int selection_index = 0;
 
     Selection* selection = &selections[selection_index];
-    selection_index += selection_count * 256; // Make sure we can modify downwards
 
     int step_size = 1;
     if (kHeld & KEY_Y) { step_size *= 2; }
@@ -142,12 +185,19 @@ int main() {
     if (step != 0) {
       selection->modifyCb(selection->data, step * step_size);
     } else {
-      if (kDown & KEY_UP) { selection_index--; }
-      if (kDown & KEY_DOWN) { selection_index++; }
+      int scroll = 0;
+      if (kDown & KEY_UP) { scroll--; }
+      if (kDown & KEY_DOWN) { scroll++; }
+      if (scroll != 0) {
+        do {
+          selection_index += selection_count * 256 + scroll; // Make sure we can modify downwards
+          selection_index %= selection_count;
+        } while(selections[selection_index].name == NULL);
+      }
     }
 
     // Clear console and its buffer
-    sprintf(out_buffer, "\x1b[2J\nBuilt on %s / %s\n\n\n", __DATE__, __TIME__);
+    sprintf(out_buffer, "\x1b[2J" CONSOLE_RESET "\nBuilt on %s / %s\n\n\n", __DATE__, __TIME__);
 
     // Next we run the update handler which might fiddle with the values some more
     update();
@@ -155,19 +205,20 @@ int main() {
     // Now start clearing the buffer
     C3D_RenderBufClear(&rb);
  
-    // And finally we draw the menu with the values we are left with
+    // Draw the menu
     selection_index %= selection_count;
-
     printf("\n\nStep size: x%d\n\n", step_size);
     for (unsigned int i = 0; i < selection_count; i++) {
         Selection* selection = &selections[i];
-        printf("%s%s: %s\n",
-#ifdef CONSOLE_RED
-               i == selection_index ? CONSOLE_RED "*" : CONSOLE_RESET " ",
-#else
-               i == selection_index ? " -> " : "    ",
-#endif
-               selection->name, selection->valueCb(selection->data));
+        if (selection->name == NULL) {
+          printf("\n");
+          continue;
+        }
+        printf("%s%s: %*s%s\n",
+               i == selection_index ? CONSOLE_RED " > " : CONSOLE_RESET "   ",
+               selection->name,
+               32 - strlen(selection->name), selection->valueCb(selection->data),
+               i == selection_index ? " <" : "  ");
     }
 
     // Now we wait for the clear to complete and run the draw function
