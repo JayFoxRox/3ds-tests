@@ -22,7 +22,11 @@
 #define CONSOLE_RESET ""
 #endif
 
-char out_buffer[32*1024]; // 32kB buffer..
+// 32kB buffer..
+#define BUFFER_SIZE 32*1024
+
+static char shown_buffer[BUFFER_SIZE]; // Currently displayed buffer (to avoid weird effects)
+static char out_buffer[BUFFER_SIZE]; // Buffer for printf
 #define printf(...) sprintf(&out_buffer[strlen(out_buffer)], __VA_ARGS__);
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
@@ -227,7 +231,10 @@ int main() {
     draw();
 
     // Supply new data for bottom screen
-    fprintf(stdout, out_buffer);
+    if (memcmp(shown_buffer, out_buffer, sizeof(shown_buffer))) {
+        fprintf(stdout, out_buffer);
+        memcpy(shown_buffer, out_buffer, sizeof(shown_buffer));
+    }
 
     // Submit GPU commands and transfer bottom screen
     C3D_Flush();

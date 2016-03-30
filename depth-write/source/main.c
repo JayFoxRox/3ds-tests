@@ -3,15 +3,21 @@
 bool w_buffer = false;
 float depth_scale = -1.0f;
 float depth_offset = 0.0f;
-float vertex_z = -0.5f;
-float vertex_w = 1.0f;
+float vertex_top_z = -0.5f;
+float vertex_top_w = 1.0f;
+float vertex_bottom_z = -0.5f;
+float vertex_bottom_w = 1.0f;
 
 Selection selections[] = {
   { "W-Buffer", boolModify, boolValue, &w_buffer },
   { "Depth Scale", floatModify, floatValue, &depth_scale },
   { "Depth Offset", floatModify, floatValue, &depth_offset },
-  { "Vertex Z", floatModify, floatValue, &vertex_z },
-  { "Vertex W", floatModify, floatValue, &vertex_w }
+  {},
+  { "Top-Vertex Z", floatModify, floatValue, &vertex_top_z },
+  { "Top-Vertex W", floatModify, floatValue, &vertex_top_w },
+  {},
+  { "Bottom-Vertex Z", floatModify, floatValue, &vertex_bottom_z },
+  { "Bottom-Vertex W", floatModify, floatValue, &vertex_bottom_w }
 };
 const unsigned int selection_count = ARRAY_SIZE(selections);
 
@@ -24,12 +30,12 @@ static int uLoc_projection;
 static C3D_Mtx projection;
 
 struct {
-  float x, y;
+  float x, y, weight; // weight = 0.0:bottom / 1.0:top
   float r, g, b;
 } vertices[] = {
-  {    0.0f,   80.0f, 1.0f, 0.0f, 0.0f },
-  { -100.0f,  -80.0f, 0.0f, 1.0f, 0.0f },
-  { +100.0f,  -80.0f, 0.0f, 0.0f, 1.0f }
+  {    0.0f,   80.0f, 1.0f, 1.0f, 0.0f, 0.0f },
+  { -100.0f,  -80.0f, 0.0f, 0.0f, 1.0f, 0.0f },
+  { +100.0f,  -80.0f, 0.0f, 0.0f, 0.0f, 1.0f }
 };
 
 static void* vbo_data;
@@ -64,7 +70,7 @@ void initialize(void) {
   // Configure attributes for use with the vertex shader
   C3D_AttrInfo* attrInfo = C3D_GetAttrInfo();
   AttrInfo_Init(attrInfo);
-  AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 2); // v0=x,y
+  AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 3); // v0=x,y,weight
   AttrInfo_AddLoader(attrInfo, 1, GPU_FLOAT, 3); // v1=r,g,b
 
   // Configure the first fragment shading substage to just pass through the vertex color
@@ -76,6 +82,17 @@ void initialize(void) {
 
 }
 
+static float print_depth(const char* title, float z, float w) {
+  float depth = z * depth_scale / w + depth_offset;
+  if (w_buffer) {
+    depth *= w;
+    printf("%s W: z*scale+offset*w:  %+.3f\n", title, depth);
+  } else {
+    printf("%s Z: z/w*scale+offset:  %+.3f\n", title, depth);
+  }
+  return depth;
+}
+
 void update(void) {
 
   // Coordinate system has been corrected to reflect actual display orientation
@@ -83,19 +100,21 @@ void update(void) {
   uint32_t raw_result = raw_buffer & 0xFFFFFF;
   float f_result = raw_result / (float)0xFFFFFF;
 
-  float depth = vertex_z * depth_scale / vertex_w + depth_offset;
-  if (w_buffer) {
-    depth *= vertex_w;
-    printf("W-Buffer: z*scale+offset*w:  %+.3f\n", depth);
-  } else {
-    printf("Z-Buffer: z/w*scale+offset:  %+.3f\n", depth);
-  }
+  float depth_top = print_depth("Top   ", vertex_top_z, vertex_top_w);
+  float depth_bottom = print_depth("Bottom", vertex_bottom_z, vertex_bottom_w);
+
+  float vertex_z = (vertex_bottom_z + vertex_top_z) * 0.5f;
+  float vertex_w = (vertex_bottom_w + vertex_top_w) * 0.5f;
+
+  float depth = print_depth("Center", vertex_z, vertex_w);
+  printf("Center Depth (Vertex):       %+.3f\n", (depth_top+depth_bottom)*0.5f);
 
   bool z_clip = (vertex_z < -vertex_w) || (vertex_z > 0.0f);
   bool w_clip = (vertex_w <= 0.0f);
 
-  printf("Z Clip:                         %3s\n", z_clip ? "Yes" : "No");
-  printf("W Clip:                         %3s\n", w_clip ? "Yes" : "No");
+  printf("\n");
+  printf("Center Z Clip:                  %3s\n", z_clip ? "Yes" : "No");
+  printf("Center W Clip:                  %3s\n", w_clip ? "Yes" : "No");
 
   // Clamp depth value
   if (depth < 0.0f) { depth = 0.0f; }
@@ -103,12 +122,11 @@ void update(void) {
 
   bool shown = !z_clip && !w_clip;
 
-  printf("\n\n");
+  printf("\n");
   printf("Guessing triangle shown:        %3s\n", shown ? "Yes" : "No");
   printf("Guessed depth:               %+.3f\n", shown ? depth : 0.0f );
   printf("\n");
   printf("Last frame depth: 0x%06" PRIX32 " = %+.3f\n", raw_result, f_result);
-  printf("\n");
 
 }
 
@@ -128,7 +146,7 @@ void draw(void) {
   GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
 #endif
 
-  C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, 0.0f, 0.0f, vertex_z, vertex_w); // x = depth
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, vertex_bottom_z, vertex_bottom_w, vertex_top_z, vertex_top_w); // x = depth
 
   // Draw the VBO
   C3D_DrawArrays(GPU_TRIANGLES, 0, 3);

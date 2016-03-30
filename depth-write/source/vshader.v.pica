@@ -15,9 +15,14 @@
 
 .proc main
 
+  ; We use r1 to mix vertices according to weight (r2 = temp because mad is broken)
+  add r1.z, myconst.y, -inpos.z ; z = 1.0 - weight
+  mul r1.xy, vertex.xy, r1.zz ; xy = bottom_xy * (1.0 - weight)
+  mul r2.xy, vertex.zw, inpos.zz ; xy += top_xy * weight
+  add r1.xy, r1.xy, r2.xy 
+
   ; r0 = inpos.xy, 0.5, 1.0
-  mov r1, vertex.ww
-  mul r0.xy,  inpos.xy, r1.xy
+  mul r0.xy,  inpos.xy, r1.yy
   mov r0.z,   myconst.x
   mov r0.w,   myconst.x
 
@@ -29,10 +34,8 @@
   ; outpos = projectionMatrix * inpos; force hardcoded z and w
   dp4 outpos.x, projection[0], r0
   dp4 outpos.y, projection[1], r0
-;  dp4 outpos.z, projection[2], r0
-;  dp4 outpos.w, projection[3], r0
-  mov outpos.z, vertex.z
-  mov outpos.w, vertex.w
+  mov outpos.z, r1.x
+  mov outpos.w, r1.y
 
   ; outcolor = (r15.xyz, 1.0)
   mov outclr, r15
