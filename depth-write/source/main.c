@@ -107,7 +107,7 @@ void update(void) {
   float vertex_w = (vertex_bottom_w + vertex_top_w) * 0.5f;
 
   float depth = print_depth("Center", vertex_z, vertex_w);
-  printf("Center Depth (Vertex):       %+.3f\n", (depth_top+depth_bottom)*0.5f);
+  printf("Center Depth (Vertex):       %+.3f\n", (depth_top + depth_bottom)*0.5f);
 
   bool z_clip = (vertex_z < -vertex_w) || (vertex_z > 0.0f);
   bool w_clip = (vertex_w <= 0.0f);
