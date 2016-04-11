@@ -1,21 +1,21 @@
 #include "../../base.inl"
 
 const char* blend_names[] = {
-  "GPU_ZERO",
-  "GPU_ONE",
-  "GPU_SRC_COLOR",
-  "GPU_ONE_MINUS_SRC_COLOR",
-  "GPU_DST_COLOR",
-  "GPU_ONE_MINUS_DST_COLOR",
-  "GPU_SRC_ALPHA",
-  "GPU_ONE_MINUS_SRC_ALPHA", 
-  "GPU_DST_ALPHA",
-  "GPU_ONE_MINUS_DST_ALPHA",
-  "GPU_CONSTANT_COLOR",
-  "GPU_ONE_MINUS_CONSTANT_COLOR",
-  "GPU_CONSTANT_ALPHA",
-  "GPU_ONE_MINUS_CONSTANT_ALPHA",
-  "GPU_SRC_ALPHA_SATURATE",
+  "ZERO",
+  "ONE",
+  "SRC_COLOR",
+  "ONE_MINUS_SRC_COLOR",
+  "DST_COLOR",
+  "ONE_MINUS_DST_COLOR",
+  "SRC_ALPHA",
+  "ONE_MINUS_SRC_ALPHA", 
+  "DST_ALPHA",
+  "ONE_MINUS_DST_ALPHA",
+  "CONSTANT_COLOR",
+  "ONE_MINUS_CONST_COL.",
+  "CONSTANT_ALPHA",
+  "ONE_MINUS_CONST_ALP.",
+  "SRC_ALPHA_SATURATE",
   "unknown15"
 };
 
@@ -25,10 +25,10 @@ ListSelector alpha_src_blend = { 0, ARRAY_SIZE(blend_names), blend_names };
 ListSelector alpha_dst_blend = { 0, ARRAY_SIZE(blend_names), blend_names };
 
 Selection selections[] = {
-  { "Color Src Blend", listSelectorModify, listSelectorValue, &color_src_blend },
-  { "Color Dst Blend", listSelectorModify, listSelectorValue, &color_dst_blend },
-  { "Alpha Src Blend", listSelectorModify, listSelectorValue, &alpha_src_blend },
-  { "Alpha Dst Blend", listSelectorModify, listSelectorValue, &alpha_dst_blend },
+  { "RGB Src", listSelectorModify, listSelectorValue, &color_src_blend },
+  { "RGB Dst", listSelectorModify, listSelectorValue, &color_dst_blend },
+  { " A  Src", listSelectorModify, listSelectorValue, &alpha_src_blend },
+  { " A  Dst", listSelectorModify, listSelectorValue, &alpha_dst_blend },
 };
 const unsigned int selection_count = ARRAY_SIZE(selections);
 
@@ -79,7 +79,7 @@ void initialize(void) {
   // Configure attributes for use with the vertex shader
   C3D_AttrInfo* attrInfo = C3D_GetAttrInfo();
   AttrInfo_Init(attrInfo);
-  AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 2); // v0=x,y
+  AttrInfo_AddLoader(attrInfo, 0, GPU_FLOAT, 4); // v0=x,y
   AttrInfo_AddLoader(attrInfo, 1, GPU_FLOAT, 3); // v1=r,g,b
 
   // Configure the first fragment shading substage to just pass through the vertex color
@@ -98,8 +98,8 @@ void update(void) {
 
   printf("Last frame color:   0x%08" PRIX32 "\n", raw_color);
 
-  //FIXME: Configure clear for next frame
-  uint32_t clear_value = 0x33333333;
+  // Configure clear for next frame
+  uint32_t clear_value = 0x55555555;
   rb.clearColor = clear_value;
   rb.clearDepth = clear_value;
 
@@ -109,7 +109,7 @@ void draw(void) {
 
   // WARNING: DO **NOT** USE ANY C3D STUFF, ESPECIALLY NOTHING EFFECT RELATED!
 
-  GPUCMD_AddWrite(GPUREG_BLEND_COLOR, 0xCCCCCCCC);
+  GPUCMD_AddWrite(GPUREG_BLEND_COLOR, 0x33333333);
   GPUCMD_AddWrite(GPUREG_BLEND_FUNC, (GPU_BLEND_ADD << 0) |
                                      (GPU_BLEND_ADD << 8) |
                                      (color_src_blend.index << 16) |

@@ -70,7 +70,7 @@ typedef struct {
 char* listSelectorValue(const void* data) {
   static char buffer[128];
   const ListSelector* value = (const ListSelector*)data;
-  snprintf(buffer, sizeof(buffer), "%d (%s)", value->index, value->items[value->index]);
+  snprintf(buffer, sizeof(buffer), "%s=%d", value->items[value->index], value->index);
   return buffer;
 }
 void listSelectorModify(void* data, int step) {
