@@ -43,7 +43,6 @@ static DVLB_s* vshader_dvlb;
 
 static shaderProgram_s program;
 
-static int uLoc_vertex;
 static int uLoc_projection;
 static C3D_Mtx projection;
 
@@ -67,7 +66,6 @@ void initialize(void) {
   C3D_BindProgram(&program);
   
   // Get the location of the uniforms
-  uLoc_vertex = shaderInstanceGetUniformLocation(program.vertexShader, "vertex");
   uLoc_projection = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
 
   // Compute the projection matrix
@@ -175,16 +173,12 @@ void draw(void) {
   bool w_buffer = true;
   float depth_scale = -1.0f;
   float depth_offset = 0.0f;
-  float vertex_z = -0.5f;
-  float vertex_w = 1.0f;
 
 #if 1
   GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
   GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
   GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
 #endif
-
-  C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, 0.0f, 0.0f, vertex_z, vertex_w); // x = depth
 
   // Draw the VBO
   C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
