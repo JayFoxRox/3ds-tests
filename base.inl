@@ -62,6 +62,23 @@ void boolModify(void* data, int step) {
   return;
 }
 
+typedef struct {
+  unsigned int index;
+  unsigned int item_count;
+  const char** items;
+} ListSelector;
+char* listSelectorValue(const void* data) {
+  static char buffer[128];
+  const ListSelector* value = (const ListSelector*)data;
+  snprintf(buffer, sizeof(buffer), "%d (%s)", value->index, value->items[value->index]);
+  return buffer;
+}
+void listSelectorModify(void* data, int step) {
+  ListSelector* value = (ListSelector*)data;
+  value->index = (unsigned int)(value->index + step) % value->item_count;
+  return;
+}
+
 typedef uint8_t Mask;
 
 static char* _maskValue(const void* data, char* pattern) {
