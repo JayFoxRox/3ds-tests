@@ -3,6 +3,8 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
+#include "../rand.h"
+
 #define EXP_SIZE 11ULL
 #define EXP_SHIFT 52ULL
 #define EXP_MASK (((1ULL << EXP_SIZE) - 1ULL) << EXP_SHIFT)
@@ -12,6 +14,23 @@ int main() {
   // Initialize the seed and open a log file
   srand(555);
   FILE* f = fopen("out.txt", "w");
+  if (f == NULL) {
+     return 1;
+  }
+
+  uint32_t fpscr;
+  uint32_t fpexc;
+  asm volatile("vmrs %0, fpscr\n"
+               "vmrs %1, fpexc\n"
+               : "=r"(fpscr), "=r"(fpexc));
+  fprintf(f, "Starting; fpscr=0x%08" PRIX32 "; fpexc=0x%08" PRIX32 "\n", fpscr, fpexc);
+
+#if 0
+  //FIXME: Only replace rounding mode
+  fpscr = 3 << 22; // Round to zero
+  asm volatile("vmsr fpscr, %0\n"
+               :: "r"(fpscr));
+#endif
 
   // 100k rounds should be enough
   unsigned int rounds = 100000;
@@ -30,7 +49,7 @@ int main() {
     int exp = 0;
     switch(type) {
       case 0:
-        exp = rand() % 1022;
+        exp = rand32() % 1022;
         break;
       case 1:
         exp = 1022;
@@ -39,10 +58,10 @@ int main() {
         exp = 1023;
         break;
       case 3:
-        exp = rand();
+        exp = rand32();
         break;
       case 4:
-        exp = (rand() % 40) - 5;
+        exp = (rand32() % 40) - 5;
         break;
       default:
         fprintf(f, "Unsupported mode %d!\n", type);
@@ -50,7 +69,7 @@ int main() {
     }
 
     // Generate random mantissa + sign and replace the exp by what we chose
-    uint64_t in = (uint64_t)rand() << 32 | (uint64_t)rand();
+    uint64_t in = rand64();
     in &= ~EXP_MASK;
     in |= ((uint64_t)(exp + 1023) << EXP_SHIFT) & EXP_MASK;
 
