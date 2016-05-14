@@ -12,8 +12,8 @@
 
 static void run_test(uint32_t fpscr) {
 
-  // 20k rounds should be enough
-  unsigned int rounds = 20000;
+  // 10k rounds should be enough
+  unsigned int rounds = 10000;
 
   char path[64];
   sprintf(path, "out-ftoi-0x%08" PRIX32 ".txt", fpscr);
@@ -24,10 +24,10 @@ static void run_test(uint32_t fpscr) {
      return;
   }
 
-  fprintf(f, "Setting fpscr 0x%08" PRIX32 "\n", fpscr);
-
-  asm volatile("vmsr fpscr, %0\n" : : "r"(fpscr));
-
+  uint32_t old_fpscr = 0xFFFFFFFF;
+  asm volatile("vmrs %0, fpscr\n"
+               : "=r"(old_fpscr));
+  fprintf(f, "Setting fpscr 0x%08" PRIX32 ", keeping 0x%08" PRIX32 "\n", fpscr, old_fpscr);
   fprintf(f, "Starting\n");
 
   srand(555);
@@ -72,13 +72,18 @@ static void run_test(uint32_t fpscr) {
     uint32_t out_u;
     uint32_t out_s;
 
-    asm volatile("vldr d0, %2\n"
+    // Have to reset fpscr before doing any calls to nintendo code,
+    // as there seems to be a bug with some rounding modes
+    asm volatile("vmsr fpscr, %3\n"
+                 "vldr d0, %2\n"
                  "ftouid s0, d0\n"
                  "ftosid s1, d0\n"
                  "vstr s0, %0\n"
                  "vstr s1, %1\n"
+                 "vmsr fpscr, %4\n"
                  : "=m"(out_u), "=m"(out_s)
-                 : "m"(in));
+                 : "m"(in), "r"(fpscr), "r"(old_fpscr));
+
 
     fprintf(f, "in: 0x%016" PRIX64 "\ttype: %d\tfptoui: 0x%08" PRIX32 "\tfptosi: 0x%08" PRIX32 "\n", in, type, out_u, out_s);
 
@@ -92,8 +97,24 @@ static void run_test(uint32_t fpscr) {
 int main() {
 
   run_test(0x00000000);
+  run_test(0x00400000);
+  run_test(0x00800000);
+  run_test(0x00C00000);
+
+  run_test(0x01000000);
+  run_test(0x01400000);
+  run_test(0x01800000);
+  run_test(0x01C00000);
+
+  run_test(0x02000000);
+  run_test(0x02400000);
+  run_test(0x02800000);
+  run_test(0x02C00000);
+
+  run_test(0x03000000);
+  run_test(0x03400000);
+  run_test(0x03800000);
   run_test(0x03C00000);
-  run_test(0x03C00010);
 
   return 0;
 
