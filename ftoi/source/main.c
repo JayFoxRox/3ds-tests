@@ -9,25 +9,28 @@
 #define EXP_SHIFT 52ULL
 #define EXP_MASK (((1ULL << EXP_SIZE) - 1ULL) << EXP_SHIFT)
 
-int main() {
+
+static void run_test(uint32_t fpscr) {
+
+  // 20k rounds should be enough
+  unsigned int rounds = 20000;
+
+  char path[64];
+  sprintf(path, "out-ftoi-0x%08X.txt", fpscr);
 
   // Initialize the seed and open a log file
-  srand(555);
-  FILE* f = fopen("out-ftoi.txt", "w");
+  FILE* f = fopen(path, "w");
   if (f == NULL) {
      return 1;
   }
 
-  fprintf(f, "Setting rounding mode\n");
+  fprintf(f, "Setting fpscr 0x%08X\n", fpscr);
 
-  uint32_t fpscr = 0x03C00010;
   asm volatile("vmsr fpscr, %0\n" : : "r"(fpscr));
 
   fprintf(f, "Starting\n");
 
-  // 100k rounds should be enough
-  unsigned int rounds = 100000;
-
+  srand(555);
   for(unsigned int i = 0; i < rounds; i++) {
 
     // We'll do 5 different cases for simplicity
@@ -83,6 +86,14 @@ int main() {
 
   // Close the log file
   fclose(f);
+
+}
+
+int main() {
+
+  run_test(0x00000000);
+  run_test(0x03C00000);
+  run_test(0x03C00010);
 
   return 0;
 
