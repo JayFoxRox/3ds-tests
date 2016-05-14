@@ -11,7 +11,7 @@
 FILE* f;
 
 static uint32_t get_fpscr(void) {
-  uint32_t fpscr;
+  uint32_t fpscr = 0xFFFFFFFF;
   asm volatile("vmrs %0, fpscr\n" : "=r"(fpscr));
   return fpscr;
 }

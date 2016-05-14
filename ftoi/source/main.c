@@ -3,7 +3,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
-#include "../rand.h"
+#include "../../rand.h"
 
 #define EXP_SIZE 11ULL
 #define EXP_SHIFT 52ULL
@@ -13,13 +13,13 @@ int main() {
 
   // Initialize the seed and open a log file
   srand(555);
-  FILE* f = fopen("out.txt", "w");
+  FILE* f = fopen("out-ftoi.txt", "w");
   if (f == NULL) {
      return 1;
   }
 
-  uint32_t fpscr;
-  uint32_t fpexc;
+  uint32_t fpscr = 0xFFFFFFFF;
+  uint32_t fpexc = 0xFFFFFFFF;
   asm volatile("vmrs %0, fpscr\n"
                "vmrs %1, fpexc\n"
                : "=r"(fpscr), "=r"(fpexc));
