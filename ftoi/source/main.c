@@ -18,19 +18,12 @@ int main() {
      return 1;
   }
 
-  uint32_t fpscr = 0xFFFFFFFF;
-  uint32_t fpexc = 0xFFFFFFFF;
-  asm volatile("vmrs %0, fpscr\n"
-               "vmrs %1, fpexc\n"
-               : "=r"(fpscr), "=r"(fpexc));
-  fprintf(f, "Starting; fpscr=0x%08" PRIX32 "; fpexc=0x%08" PRIX32 "\n", fpscr, fpexc);
+  fprintf(f, "Setting rounding mode\n");
 
-#if 0
-  //FIXME: Only replace rounding mode
-  fpscr = 3 << 22; // Round to zero
-  asm volatile("vmsr fpscr, %0\n"
-               :: "r"(fpscr));
-#endif
+  uint32_t fpscr = 0x03C00010;
+  asm volatile("vmsr fpscr, %0\n" : : "r"(fpscr));
+
+  fprintf(f, "Starting\n");
 
   // 100k rounds should be enough
   unsigned int rounds = 100000;
