@@ -96,20 +96,10 @@ static void run_test(uint32_t fpscr) {
 
 int main() {
 
-  run_test(0x00000000);
-  run_test(0x00400000);
-  run_test(0x00800000);
-  run_test(0x00C00000);
-
   run_test(0x01000000);
   run_test(0x01400000);
   run_test(0x01800000);
   run_test(0x01C00000);
-
-  run_test(0x02000000);
-  run_test(0x02400000);
-  run_test(0x02800000);
-  run_test(0x02C00000);
 
   run_test(0x03000000);
   run_test(0x03400000);
