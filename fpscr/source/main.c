@@ -8,23 +8,30 @@
 
 #include <3ds.h>
 
-uint32_t get_fpscr(void) {
+FILE* f;
+
+static uint32_t get_fpscr(void) {
   uint32_t fpscr;
   asm volatile("vmrs %0, fpscr\n" : "=r"(fpscr));
   return fpscr;
 }
 
-void thread_func(void* arg) {
+static void set_fpscr(uint32_t fpscr) {
+  asm volatile("vmsr fpscr, %0\n" : : "r"(fpscr));
+  return;
+}
+
+static void thread_func(void* arg) {
   uint32_t old_fpscr = *(uint32_t*)arg;
   uint32_t new_fpscr = get_fpscr();
-  FILE* f = fopen("out-fpscr.txt", "w");
   fprintf(f, "old_fpscr: 0x%08" PRIX32 "\n", old_fpscr);
   fprintf(f, "new_fpscr: 0x%08" PRIX32 "\n", new_fpscr);
-  fclose(f);
   svcExitThread();
 }
 
-int main() {
+static void run_thread(void) {
+
+  // Get the current (old) fpscr
   static uint32_t old_fpscr;
   old_fpscr = get_fpscr();
 
@@ -44,6 +51,27 @@ int main() {
   }
   svcWaitSynchronization(thread, U64_MAX);
 #endif
+  return;
+}
+
+int main() {
+
+  // Open log
+  f = fopen("out-fpscr.txt", "w");
+
+  // default fpscr
+  run_thread();
+  
+  // force fpscr
+  set_fpscr(0x00000000);
+  run_thread();
+  set_fpscr(0x03C00000);
+  run_thread();
+  set_fpscr(0x03C00010);
+  run_thread();
+
+  // Close log
+  fclose(f);
 
   return 0;
 }
