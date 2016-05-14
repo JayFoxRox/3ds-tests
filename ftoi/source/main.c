@@ -16,15 +16,15 @@ static void run_test(uint32_t fpscr) {
   unsigned int rounds = 20000;
 
   char path[64];
-  sprintf(path, "out-ftoi-0x%08X.txt", fpscr);
+  sprintf(path, "out-ftoi-0x%08" PRIX32 ".txt", fpscr);
 
   // Initialize the seed and open a log file
   FILE* f = fopen(path, "w");
   if (f == NULL) {
-     return 1;
+     return;
   }
 
-  fprintf(f, "Setting fpscr 0x%08X\n", fpscr);
+  fprintf(f, "Setting fpscr 0x%08" PRIX32 "\n", fpscr);
 
   asm volatile("vmsr fpscr, %0\n" : : "r"(fpscr));
 
