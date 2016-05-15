@@ -5,21 +5,11 @@
 #include <malloc.h>
 
 #include "thread.h"
+#include "../../asm.h"
 
 #include <3ds.h>
 
 FILE* f;
-
-static uint32_t get_fpscr(void) {
-  uint32_t fpscr = 0xFFFFFFFF;
-  asm volatile("vmrs %0, fpscr\n" : "=r"(fpscr));
-  return fpscr;
-}
-
-static void set_fpscr(uint32_t fpscr) {
-  asm volatile("vmsr fpscr, %0\n" : : "r"(fpscr));
-  return;
-}
 
 static void thread_func(void* arg) {
   uint32_t old_fpscr = *(uint32_t*)arg;
