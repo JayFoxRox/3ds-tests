@@ -6,8 +6,8 @@
 #include "../../asm.h"
 #include "../../rand.h"
 
-// 50k rounds should be enough
-static unsigned int rounds = 50000;
+// 20k rounds should be enough
+static unsigned int rounds = 20000;
 
 #define EXP64_SIZE 11ULL
 #define EXP64_SHIFT 52ULL
