@@ -158,7 +158,7 @@ int main() {
   // These shouldn't influence the result
   //run_test(0x00000000); // crashes!
   //run_test(0x01400000); // crashes!
-  run_test(0x02800000);
+  //run_test(0x02800000); // crashes!
 
 
   return 0;
