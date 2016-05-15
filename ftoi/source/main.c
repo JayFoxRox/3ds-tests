@@ -72,8 +72,8 @@ static void run_test(uint32_t fpscr) {
     uint32_t out_u;
     uint32_t out_s;
 
-    // Have to reset fpscr before doing any calls to nintendo code,
-    // as there seems to be a bug with some rounding modes
+    // Do stuff..
+    // Also resets fpscr for safety
     asm volatile("vmsr fpscr, %3\n"
                  "vldr d0, %2\n"
                  "ftouid s0, d0\n"
@@ -96,15 +96,18 @@ static void run_test(uint32_t fpscr) {
 
 int main() {
 
-  run_test(0x01000000);
-  run_test(0x01400000);
-  run_test(0x01800000);
-  run_test(0x01C00000);
+  // We must have default NaN enabled or the 3DS will crash on denormals?!
 
-  run_test(0x03000000);
-  run_test(0x03400000);
-  run_test(0x03800000);
-  run_test(0x03C00000);
+  run_test(0x03000000); // works!
+  run_test(0x03400000); // works!
+  run_test(0x03800000); // works!
+  run_test(0x03C00000); // works!
+
+  run_test(0x02000000); // crashes!
+  run_test(0x02400000);
+  run_test(0x02800000);
+  run_test(0x02C00000);
+
 
   return 0;
 
