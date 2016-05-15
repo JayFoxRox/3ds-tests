@@ -155,10 +155,10 @@ int main() {
   run_test(0x03800000); // works!
   run_test(0x03C00000); // works!
 
-  run_test(0x02000000); // crashes?!
-  run_test(0x02400000);
+  // These shouldn't influence the result
+  run_test(0x00000000); // crashes?!
+  run_test(0x01400000);
   run_test(0x02800000);
-  run_test(0x02C00000);
 
 
   return 0;
