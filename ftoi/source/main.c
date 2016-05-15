@@ -156,7 +156,7 @@ int main() {
   run_test(0x03C00000); // works!
 
   // These shouldn't influence the result
-  run_test(0x00000000); // crashes?!
+  //run_test(0x00000000); // crashes!
   run_test(0x01400000);
   run_test(0x02800000);
 

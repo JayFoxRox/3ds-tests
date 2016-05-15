@@ -66,7 +66,7 @@ static uint32_t ftosi64(uint64_t in) {
     asm volatile("nop\n"
                  "vldr d0, %1\n"
                  "nop\n"
-                 "ftouid s2, d0\n"
+                 "ftosid s2, d0\n"
                  "nop\n"
                  "vstr s2, %0\n"
                  "nop\n"
