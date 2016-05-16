@@ -164,6 +164,8 @@ int main() {
   run_test(0x03800000); // works!
   run_test(0x03C00000); // works!
 
+  run_test(0x0300009F);
+
   // These shouldn't influence the result
   //run_test(0x00000000); // crashes!
   //run_test(0x01400000); // crashes!
