@@ -6,8 +6,7 @@
 #include "../../asm.h"
 #include "../../rand.h"
 
-// 20k rounds should be enough
-static unsigned int rounds = 20000;
+static unsigned int rounds = 100000;
 
 #define EXP64_SIZE 11ULL
 #define EXP64_SHIFT 52ULL
@@ -17,16 +16,18 @@ static unsigned int rounds = 20000;
 #define EXP32_SHIFT 23UL
 #define EXP32_MASK (((1UL << EXP32_SIZE) - 1UL) << EXP32_SHIFT)
 
-// We'll do 5 different cases for simplicity
+// We'll do 7 different cases for simplicity
 
 // 0: vdm_exponent < 1022 (neither)
 // 1: vdm_exponent = 1022 (vdm_exponent >= 1023 - 1)
 // 2: vdm_exponent = 1023 (vdm_exponent >= 1023 but also >= 1023 - 1)
 // 3: vdm_exponent = rand()
 // 4: vdm_exponent = rand() in [-5;+34]
+// 5: denormal
+// 6: nan
 
 static int select_exp64(unsigned int i) {
-    unsigned int type = i % 5;
+    unsigned int type = i % 7;
     switch(type) {
       case 0:
         return rand32() % 1022;
@@ -38,6 +39,10 @@ static int select_exp64(unsigned int i) {
         return rand32();
       case 4:
         return (rand32() % 40) - 5;
+      case 5:
+        return 0;
+      case 6:
+        return 2047;
       default:
         break;
     }
@@ -54,7 +59,7 @@ static uint64_t select_f64(unsigned int i) {
 }
 
 static int select_exp32(unsigned int i) {
-    unsigned int type = i % 5;
+    unsigned int type = i % 7;
     switch(type) {
       case 0:
         return rand32() % 126;
@@ -66,6 +71,10 @@ static int select_exp32(unsigned int i) {
         return rand32();
       case 4:
         return (rand32() % 40) - 5;
+      case 5:
+        return 0;
+      case 6:
+        return 255;
       default:
         break;
     }
@@ -131,7 +140,7 @@ static void run_test_to_file(const char* path, void(*callback)(FILE* f, unsigned
   for(unsigned int i = 0; i < rounds; i++) {
     callback(f, i, fpscr);
   }
-  
+
   fclose(f);
   return;
 }
