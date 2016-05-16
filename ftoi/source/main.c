@@ -40,9 +40,9 @@ static int select_exp64(unsigned int i) {
       case 4:
         return (rand32() % 40) - 5;
       case 5:
-        return 0;
+        return 0 - 1023;
       case 6:
-        return 2047;
+        return 2047 - 1023;
       default:
         break;
     }
@@ -72,9 +72,9 @@ static int select_exp32(unsigned int i) {
       case 4:
         return (rand32() % 40) - 5;
       case 5:
-        return 0;
+        return 0 - 127;
       case 6:
-        return 255;
+        return 255 - 127;
       default:
         break;
     }
