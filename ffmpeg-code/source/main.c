@@ -303,15 +303,15 @@ bl_iso_put_epel_h4_armv6:
         add             r0,  r0,  r1
         movrel r1, im
 
-str r12, [r1], #4
+str r12, [r1], #4 @0
 
 
         subs            r2,  r2,  #1
-str r2, [r1], #4
+str r2, [r1], #4 @1
         movrel          lr,  fourtap_filters_1324 - 4
         add             lr,  lr,  r12, lsl #2
         sub             r3,  r3,  r4
-str r3, [r1], #4
+str r3, [r1], #4 @2
         ldm             lr,  {r5, r6}
         ldr             lr,  [sp, #44]
 
@@ -323,50 +323,50 @@ str r3, [r1], #4
         ldr             r8,  [r2, #2]
         ldr             r7,  [r2], #4
 
-str r9, [r1], #4
+str r9, [r1], #4 @3
         uxtb16          r9,  r9,  ror #8        @ src[6] | src[4]
-str r9, [r1], #4
-str r10, [r1], #4
-str r8, [r1], #4
+str r9, [r1], #4 @4
+str r10, [r1], #4 @5
+str r8, [r1], #4 @6
         uxtb16          r10, r8,  ror #8        @ src[5] | src[3]
-str r9, [r1], #4
-str r10, [r1], #4
-str r8, [r1], #4
+str r9, [r1], #4 @7
+str r10, [r1], #4 @8
+str r8, [r1], #4 @9
         uxtb16          r8,  r8                 @ src[4] | src[2]
-str r7, [r1], #4
-str r11, [r1], #4
-str r8, [r1], #4
+str r7, [r1], #4 @10
+str r11, [r1], #4 @11
+str r8, [r1], #4 @12
         uxtb16          r11, r7,  ror #8        @ src[3] | src[1]
-str r7, [r1], #4
-str r11, [r1], #4
-str r8, [r1], #4
+str r7, [r1], #4 @13
+str r11, [r1], #4 @14
+str r8, [r1], #4 @15
         uxtb16          r7,  r7                 @ src[2] | src[0]
-str r7, [r1], #4
-str r11, [r1], #4
-str r8, [r1], #4
+str r7, [r1], #4 @16
+str r11, [r1], #4 @17
+str r8, [r1], #4 @18
 
         mov             r12, #0x40
-str r9, [r1], #4
-str r6, [r1], #4
-str r12, [r1], #4
+str r9, [r1], #4 @19
+str r6, [r1], #4 @20
+str r12, [r1], #4 @21
         smlad           r9,  r9,  r6,  r12      @ filter[3][1]
-str r9, [r1], #4
-str r6, [r1], #4
-str r12, [r1], #4
-str r7, [r1], #4
-str r5, [r1], #4
+str r9, [r1], #4 @22
+str r6, [r1], #4 @23
+str r12, [r1], #4 @24
+str r7, [r1], #4 @25
+str r5, [r1], #4 @26
         smlad           r7,  r7,  r5,  r12      @ filter[0][0]
-str r12, [r1], #4
-str r7, [r1], #4
-str r5, [r1], #4
-str r10, [r1], #4
-str r9, [r1], #4
+str r12, [r1], #4 @27
+str r7, [r1], #4 @28
+str r5, [r1], #4 @29
+str r10, [r1], #4 @30
+str r9, [r1], #4 @31
         smlad           r9,  r10, r5,  r9       @ filter[3][0]
-str r12, [r1], #4
-str r7, [r1], #4
-str r5, [r1], #4
-str r10, [r1], #4
-str r9, [r1], #4
+str r12, [r1], #4 @32
+str r7, [r1], #4 @33
+str r5, [r1], #4 @34
+str r10, [r1], #4 @35
+str r9, [r1], #4 @36 <<--- buggy!
         smlad           r10, r10, r6,  r12      @ filter[2][1]
         smlad           r12, r11, r5,  r12      @ filter[1][0]
         smlad           r7,  r11, r6,  r7       @ filter[0][1]
