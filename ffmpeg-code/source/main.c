@@ -185,7 +185,7 @@ void ff_put_vp8_epel4_h4_armv6(uint8_t *dst,
                                ptrdiff_t srcstride,
                                int h, int mx, int my);
 
-void asm_vp8_put_epel_h4_armv6(uint8_t *dst,
+void asm_vp8_put_epel8_h4_armv6(uint8_t *dst,
                                ptrdiff_t dststride,
                                uint8_t *src,
                                ptrdiff_t srcstride,
@@ -193,6 +193,16 @@ void asm_vp8_put_epel_h4_armv6(uint8_t *dst,
 ) {
   ff_put_vp8_epel8_h4_armv6(dst, dststride, src, srcstride, h, mx, my);
 }
+
+void asm_vp8_put_epel4_h4_armv6(uint8_t *dst,
+                               ptrdiff_t dststride,
+                               uint8_t *src,
+                               ptrdiff_t srcstride,
+                               int h, int mx, int my
+) {
+  ff_put_vp8_epel4_h4_armv6(dst, dststride, src, srcstride, h, mx, my);
+}
+
 
 #define FILTER_6TAP(src, F, stride)                                           \
     cm[(F[2] * src[x + 0 * stride] - F[1] * src[x - 1 * stride] +             \
@@ -261,12 +271,20 @@ times256(0xFF)
 VP8_EPEL_H(8, 4)
 VP8_EPEL_H(4, 4)
 
-void c_vp8_put_epel_h4_armv6(uint8_t *dst,
+void c_vp8_put_epel8_h4_armv6(uint8_t *dst,
                              ptrdiff_t dststride,
                              uint8_t *src,
                              ptrdiff_t srcstride,
                              int h, int mx, int my) {
   put_vp8_epel8_h4_c(dst, dststride, src, srcstride, h, mx, my);
+}
+
+void c_vp8_put_epel4_h4_armv6(uint8_t *dst,
+                             ptrdiff_t dststride,
+                             uint8_t *src,
+                             ptrdiff_t srcstride,
+                             int h, int mx, int my) {
+  put_vp8_epel4_h4_c(dst, dststride, src, srcstride, h, mx, my);
 }
 
 void cmp_vp8_put_epel_h4_armv6(const char* path,
@@ -282,7 +300,9 @@ void cmp_vp8_put_epel_h4_armv6(const char* path,
 
   FILE* f = fopen(path, "w");
   memset(dst, 0xAA, sizeof(dst));
-  memset(src, 0xAA, sizeof(src));
+  for(unsigned int i = 0; i < sizeof(src); i++) {
+    src[i] = i & 0xFF;
+  }
   callback(dst, 8, src, 8, 8, 8, 8);
   fwrite(dst, sizeof(dst), 1, f);
   fclose(f);
@@ -290,7 +310,9 @@ void cmp_vp8_put_epel_h4_armv6(const char* path,
 }
 
 int main() {
-  cmp_vp8_put_epel_h4_armv6("out-ffmpeg-asm.bin", asm_vp8_put_epel_h4_armv6);
-//  cmp_vp8_put_epel_h4_armv6("out-ffmpeg-c.bin", c_vp8_put_epel_h4_armv6);
+  cmp_vp8_put_epel_h4_armv6("out-ffmpeg-asm8.bin", asm_vp8_put_epel8_h4_armv6);
+  cmp_vp8_put_epel_h4_armv6("out-ffmpeg-c8.bin", c_vp8_put_epel8_h4_armv6);
+  cmp_vp8_put_epel_h4_armv6("out-ffmpeg-asm4.bin", asm_vp8_put_epel4_h4_armv6);
+  cmp_vp8_put_epel_h4_armv6("out-ffmpeg-c4.bin", c_vp8_put_epel4_h4_armv6);
   return 0;
 }
