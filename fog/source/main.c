@@ -1,21 +1,13 @@
-#include "../../base.inl"
+#include <3ds.h>
+#include <citro3d.h>
+#include <string.h>
+#include <stdio.h>
+#include <inttypes.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include "vshader_shbin.h"
 
-bool w_buffer = false;
-float fog_x = 0.0f;
-
-Selection selections[] = {
-  { "W-Buffer", boolModify, boolValue, &w_buffer },
-  { "Fog enabled", boolModify, boolValue, &depth_offset },
-  { "Fog curve", boolModify, boolValue, &depth_offset, "Sin(x)", "x", "x*x", "if(x).+0", "0.+if(x)", "1.-if(x)", "1.+if(x)", "0.-if(x)" },
-  { "Fog x", floatModify, floatValue, &depth_value },
-  { "Fog R", floatModify, floatValue, &depth_value },
-  { "Fog G", floatModify, floatValue, &depth_value },
-  { "Fog B", floatModify, floatValue, &depth_value },
-  { "Fog A", floatModify, floatValue, &depth_value },
-  { "Object alpha", floatModify, floatValue, &depth_value },
-  { "Mode", floatModify, floatValue, &mode, "Logic", "Blend" },
-};
-const unsigned int selection_count = ARRAY_SIZE(selections);
+#include "../../morton.h"
 
 static DVLB_s* vshader_dvlb;
 
@@ -78,17 +70,6 @@ void initialize(void) {
 
 }
 
-static float print_depth(const char* title, float z, float w) {
-  float depth = z * depth_scale / w + depth_offset;
-  if (w_buffer) {
-    depth *= w;
-    printf("%s W: z*scale+offset*w:  %+.3f\n", title, depth);
-  } else {
-    printf("%s Z: z/w*scale+offset:  %+.3f\n", title, depth);
-  }
-  return depth;
-}
-
 void update(void) {
 
   // Coordinate system has been corrected to reflect actual display orientation
@@ -96,55 +77,146 @@ void update(void) {
   uint32_t raw_result = raw_buffer & 0xFFFFFF;
   float f_result = raw_result / (float)0xFFFFFF;
 
-  float depth_top = print_depth("Top   ", vertex_top_z, vertex_top_w);
-  float depth_bottom = print_depth("Bottom", vertex_bottom_z, vertex_bottom_w);
 
-  float vertex_z = (vertex_bottom_z + vertex_top_z) * 0.5f;
-  float vertex_w = (vertex_bottom_w + vertex_top_w) * 0.5f;
-
-  float depth = print_depth("Center", vertex_z, vertex_w);
-  printf("Center Depth (Vertex):       %+.3f\n", (depth_top + depth_bottom)*0.5f);
-
-  bool z_clip = (vertex_z < -vertex_w) || (vertex_z > 0.0f);
-  bool w_clip = (vertex_w <= 0.0f);
-
-  printf("\n");
-  printf("Center Z Clip:                  %3s\n", z_clip ? "Yes" : "No");
-  printf("Center W Clip:                  %3s\n", w_clip ? "Yes" : "No");
-
-  // Clamp depth value
-  if (depth < 0.0f) { depth = 0.0f; }
-  if (depth > 1.0f) { depth = 1.0f; }
-
-  bool shown = !z_clip && !w_clip;
-
-  printf("\n");
-  printf("Guessing triangle shown:        %3s\n", shown ? "Yes" : "No");
-  printf("Guessed depth:               %+.3f\n", shown ? depth : 0.0f );
   printf("\n");
   printf("Last frame depth: 0x%06" PRIX32 " = %+.3f\n", raw_result, f_result);
 
+}
+
+
+void set_fog_index(unsigned int index) {
+  GPUCMD_AddWrite(GPUREG_FOG_LUT_INDEX, index);
+  return;
+}
+
+void set_linear_fog(float start, float end, unsigned int count) {
+
+/*
+  GPUREG_FOG_LUT_DATA0
+  ..
+  GPUREG_FOG_LUT_DATA7
+*/
+
+  for(unsigned int i = 0; i <= count; i++) {
+    float t = i / (float)count;
+    float value = start + t * (end - start);
+    float next_value = t;
+    if (i > 0) {
+      upload_fog_value(value, next_value);
+    }
+    previous_value = value;
+  }
+  return;
+
+}
+
+void set_select_fog(float x, unsigned int count) {
+  for(unsigned int i = 0; i < count; i++) {
+    upload_fog_value(x);
+  }
+  return;
+}
+
+void set_alpha_blend_mode() {
+}
+
+void set_logic_op_mode() {
+}
+
+void set_fog_mode(bool z_flip, uint32_t color) {
+  GPUCMD_AddWrite(GPUREG_FOG_COLOR, color);
+//FIXME!  GPUCMD_AddWrite(GPUREG_TEXENV_UPDATE_BUFFER, z_flip ? (1<<16) : 0, 0xFF0F);
+  return;
+}
+
+void set_alpha_test(bool enabled) {
+}
+
+void set_alpha_ref(bool enabled) {
+  //FIXME: GPUREG_FRAGOP_ALPHA_TEST
+}
+
+void set_triangle(bool w_buffer, float top_depth, float bottom_depth) {
+  // Configure depth mapping
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
+
+  if (w_buffer) {
+    //FIXME: Find formula
+  } else {
+    //FIXME: Find formula
+  }
+
+  C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, vertex_bottom_z, vertex_bottom_w, vertex_top_z, vertex_top_w); // x = depth
+
+  return;
 }
 
 void draw(void) {
 
   // WARNING: DO **NOT** USE ANY C3D STUFF, ESPECIALLY NOTHING EFFECT RELATED!
 
+  // Now start clearing the buffer
+  C3D_RenderBufClear(&rb);
+
+  // Now we wait for the clear to complete and run the draw function
+  C3D_VideoSync();
+
   // Disable or enable depth test..
   bool depth_test = false;
   u32 compare_mode = GPU_ALWAYS;
   GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (!!depth_test) | ((compare_mode & 7) << 4) | (GPU_WRITE_ALL << 8));
 
-#if 1
-  // Configure depth mapping
-  GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
-  GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
-  GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
-#endif
-
-  C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, vertex_bottom_z, vertex_bottom_w, vertex_top_z, vertex_top_w); // x = depth
+  set_depth_buffer(true);
 
   // Draw the VBO
   C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
 
+  C3D_Flush();
+  C3D_VideoSync();
+//    C3D_RenderBufTransfer(&rb, (u32*)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL), DISPLAY_TRANSFER_FLAGS);
+
+}
+
+int main() {
+  // Initialize graphics
+  gfxInitDefault();
+
+  consoleInit(GFX_BOTTOM, NULL);
+
+  C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
+
+  C3D_RenderBufInit(&rb, 240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+  rb.clearColor = CLEAR_COLOR;
+  rb.clearDepth = 0x000000;
+  C3D_RenderBufClear(&rb);
+  C3D_RenderBufBind(&rb);
+
+  // Initialize the scene
+//  sceneInit();
+
+  initialize();
+
+  for(unsigned int i = 0; i < 128; i++) {
+    set_fog_index(0);
+    set_select_fog(128);
+    set_fog_index(i);
+    set_linear_fog(1.0f, 0.0f, 1);
+
+    set_alpha_test(false);
+    set_fog_mode(false, 0xFFFFFF00);
+    set_triangle(true, 0.0f, 1.0f);
+
+    draw();
+    dump_frame();
+  }
+
+  // Deinitialize the scene
+  sceneExit();
+
+  // Deinitialize graphics
+  C3D_Fini();
+  gfxExit();
+  return 0;
 }
