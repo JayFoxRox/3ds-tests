@@ -82,16 +82,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 
   asm(R"(
 
-
-  fourtap_filters_1324:
-          .short     -6,  12, 123, -1
-          .short     -9,  50,  93, -6
-          .short     -6,  93,  50, -9
-          .short     -1, 123,  12, -6
+fourtap_filters_1324:
+        @.align 4
+        .short     -6,  12, 123, -1
+        .short     -9,  50,  93, -6
+        .short     -6,  93,  50, -9
+        .short     -1, 123,  12, -6
 
 .macro  sat4            r0,  r1,  r2,  r3
         asr             \r0, \r0, #7
@@ -287,6 +288,150 @@ void c_vp8_put_epel4_h4_armv6(uint8_t *dst,
   put_vp8_epel4_h4_c(dst, dststride, src, srcstride, h, mx, my);
 }
 
+
+uint32_t im[1024];
+
+  asm(R"(
+
+.func iso_vp8_put_epel_h4_armv6
+        push            {r1, r4-r11, lr}
+
+
+bl_iso_put_epel_h4_armv6:
+
+        @ Hack by fox to only do element [1]
+        add             r0,  r0,  r1
+        movrel r1, im
+
+str r12, [r1], #4
+
+
+        subs            r2,  r2,  #1
+str r2, [r1], #4
+        movrel          lr,  fourtap_filters_1324 - 4
+        add             lr,  lr,  r12, lsl #2
+        sub             r3,  r3,  r4
+str r3, [r1], #4
+        ldm             lr,  {r5, r6}
+        ldr             lr,  [sp, #44]
+
+        subs            lr,  lr,  #1
+        ldr             r4,  [sp, #40]
+        add             r2,  r2,  r3
+
+        ldr             r9,  [r2, #3]
+        ldr             r8,  [r2, #2]
+        ldr             r7,  [r2], #4
+
+str r9, [r1], #4
+        uxtb16          r9,  r9,  ror #8        @ src[6] | src[4]
+str r9, [r1], #4
+str r10, [r1], #4
+str r8, [r1], #4
+        uxtb16          r10, r8,  ror #8        @ src[5] | src[3]
+str r9, [r1], #4
+str r10, [r1], #4
+str r8, [r1], #4
+        uxtb16          r8,  r8                 @ src[4] | src[2]
+str r7, [r1], #4
+str r11, [r1], #4
+str r8, [r1], #4
+        uxtb16          r11, r7,  ror #8        @ src[3] | src[1]
+str r7, [r1], #4
+str r11, [r1], #4
+str r8, [r1], #4
+        uxtb16          r7,  r7                 @ src[2] | src[0]
+str r7, [r1], #4
+str r11, [r1], #4
+str r8, [r1], #4
+
+        mov             r12, #0x40
+str r9, [r1], #4
+str r6, [r1], #4
+str r12, [r1], #4
+        smlad           r9,  r9,  r6,  r12      @ filter[3][1]
+str r9, [r1], #4
+str r6, [r1], #4
+str r12, [r1], #4
+str r7, [r1], #4
+str r5, [r1], #4
+        smlad           r7,  r7,  r5,  r12      @ filter[0][0]
+str r12, [r1], #4
+str r7, [r1], #4
+str r5, [r1], #4
+str r10, [r1], #4
+str r9, [r1], #4
+        smlad           r9,  r10, r5,  r9       @ filter[3][0]
+str r12, [r1], #4
+str r7, [r1], #4
+str r5, [r1], #4
+str r10, [r1], #4
+str r9, [r1], #4
+        smlad           r10, r10, r6,  r12      @ filter[2][1]
+        smlad           r12, r11, r5,  r12      @ filter[1][0]
+        smlad           r7,  r11, r6,  r7       @ filter[0][1]
+        smlad           r10, r8,  r5,  r10      @ filter[2][0]
+        smlad           r12, r8,  r6,  r12      @ filter[1][1]
+
+        subs            r4,  r4,  #4
+
+str r7, [r1], #4
+str r12, [r1], #4
+str r10, [r1], #4
+str r9, [r1], #4
+        sat4            r7,  r12, r10, r9
+str r7, [r1], #4
+str r12, [r1], #4
+str r10, [r1], #4
+str r9, [r1], #4
+        str             r7,  [r0], #4
+
+
+
+        pop             {r1, r4-r11, pc}
+.endfunc
+
+
+.macro  iso_vp8_mc_1        name, size, hv
+ff_iso_put_vp8_\name\size\()_\hv\()_armv6:
+.func ff_iso_put_vp8_\name\size\()_\hv\()_armv6 @ export=1
+        sub             r1,  r1,  #\size
+        mov             r12, sp
+        push            {r1, r4-r11, lr}
+        ldm             r12, {r5-r7}
+        mov             r4,  #\size
+        stm             r12, {r4, r5}
+        orr             r12, r6,  r7
+        b               bl_iso_put_\name\()_\hv\()_armv6
+.endfunc
+.endm
+
+iso_vp8_mc_1                epel,   8, h4
+iso_vp8_mc_1                epel,   4, h4
+
+  )");
+
+void ff_iso_put_vp8_epel8_h4_armv6(uint8_t *dst,
+                                   ptrdiff_t dststride,
+                                   uint8_t *src,
+                                   ptrdiff_t srcstride,
+                                   int h, int mx, int my);
+
+// Only calculates dst[1]
+void iso_asm_vp8_put_epel8_h4_armv6(uint8_t *dst,
+             ptrdiff_t dststride,
+             uint8_t *src,
+             ptrdiff_t srcstride,
+             int h, int mx, int my) {
+  memset(im, 0xFF, sizeof(im));
+  FILE* f = fopen("im.txt", "w");
+  ff_iso_put_vp8_epel8_h4_armv6(dst, dststride, src, srcstride, h, mx, my);
+  for(unsigned int i = 0; i < (sizeof(im) / sizeof(im[0])); i++) {
+    fprintf(f, "im[%d] = 0x%08" PRIX32 "\n", i, im[i]);
+  }
+  fclose(f);
+}
+
 void cmp_vp8_put_epel_h4_armv6(const char* path,
                                void(*callback)(uint8_t *dst,
                                    ptrdiff_t dststride,
@@ -310,6 +455,7 @@ void cmp_vp8_put_epel_h4_armv6(const char* path,
 }
 
 int main() {
+  cmp_vp8_put_epel_h4_armv6("out-ffmpeg-iso-asm8-1.bin", iso_asm_vp8_put_epel8_h4_armv6);
   cmp_vp8_put_epel_h4_armv6("out-ffmpeg-asm8.bin", asm_vp8_put_epel8_h4_armv6);
   cmp_vp8_put_epel_h4_armv6("out-ffmpeg-c8.bin", c_vp8_put_epel8_h4_armv6);
   cmp_vp8_put_epel_h4_armv6("out-ffmpeg-asm4.bin", asm_vp8_put_epel4_h4_armv6);
