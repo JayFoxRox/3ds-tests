@@ -9,6 +9,17 @@
 
 #include "../../morton.h"
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+
+#define CLEAR_COLOR 0x68B0D8FF
+
+#define DISPLAY_TRANSFER_FLAGS \
+  (GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
+  GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) | GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) | \
+  GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO))
+
+static C3D_RenderBuf rb;
+
 static DVLB_s* vshader_dvlb;
 
 static shaderProgram_s program;
@@ -21,9 +32,9 @@ struct {
   float x, y, weight; // weight = 0.0:bottom / 1.0:top
   float r, g, b;
 } vertices[] = {
-  {    0.0f,   80.0f, 1.0f, 1.0f, 0.0f, 0.0f },
-  { -100.0f,  -80.0f, 0.0f, 0.0f, 1.0f, 0.0f },
-  { +100.0f,  -80.0f, 0.0f, 0.0f, 0.0f, 1.0f }
+  {    0.0f,   256.0f, 1.0f, 1.0f, 0.0f, 0.0f },
+  { -128.0f,  -256.0f, 0.0f, 0.0f, 1.0f, 0.0f },
+  { +128.0f,  -256.0f, 0.0f, 0.0f, 0.0f, 1.0f }
 };
 
 static void* vbo_data;
@@ -41,7 +52,8 @@ void initialize(void) {
   uLoc_projection = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
 
   // Compute the projection matrix
-  Mtx_OrthoTilt(&projection, -200.0, 200.0, -120.0, 120.0, 0.0, 1.0);
+  Mtx_OrthoTilt(&projection, -128.0, 128.0, -256.0, 256.0, 0.0, 1.0);
+  //FIXME: Avoid the rotation!
 
   // Update the uniforms
   C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
@@ -72,20 +84,29 @@ void initialize(void) {
 
 void update(void) {
 
+/*
   // Coordinate system has been corrected to reflect actual display orientation
   u32 raw_buffer = *(u32*)get_depth(200, 120);
   uint32_t raw_result = raw_buffer & 0xFFFFFF;
   float f_result = raw_result / (float)0xFFFFFF;
 
-
   printf("\n");
   printf("Last frame depth: 0x%06" PRIX32 " = %+.3f\n", raw_result, f_result);
+*/
 
 }
 
 
 void set_fog_index(unsigned int index) {
   GPUCMD_AddWrite(GPUREG_FOG_LUT_INDEX, index);
+  return;
+}
+
+void upload_fog_value(float value, float difference) {
+  unsigned int fog_value = (1.0f - value) * ((1 << 11) - 1);
+  int fog_difference = -difference * ((1 << 11) - 1);
+  uint32_t fog_lut_entry = ((fog_value & ((1 << 11) - 1)) << 13) | (fog_difference & ((1 << 13) - 1));
+  GPUCMD_AddWrite(GPUREG_FOG_LUT_DATA7, fog_lut_entry);
   return;
 }
 
@@ -97,14 +118,11 @@ void set_linear_fog(float start, float end, unsigned int count) {
   GPUREG_FOG_LUT_DATA7
 */
 
-  for(unsigned int i = 0; i <= count; i++) {
-    float t = i / (float)count;
-    float value = start + t * (end - start);
-    float next_value = t;
-    if (i > 0) {
-      upload_fog_value(value, next_value);
-    }
-    previous_value = value;
+  float delta = (end - start) / (float)count;
+  float value = start;
+  for(unsigned int i = 0; i < count; i++) {
+    upload_fog_value(value, delta);
+    value += delta;
   }
   return;
 
@@ -112,7 +130,7 @@ void set_linear_fog(float start, float end, unsigned int count) {
 
 void set_select_fog(float x, unsigned int count) {
   for(unsigned int i = 0; i < count; i++) {
-    upload_fog_value(x);
+    upload_fog_value(x, 0.0f);
   }
   return;
 }
@@ -137,16 +155,26 @@ void set_alpha_ref(bool enabled) {
 }
 
 void set_triangle(bool w_buffer, float top_depth, float bottom_depth) {
-  // Configure depth mapping
-  GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
-  GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
-  GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
+
 
   if (w_buffer) {
     //FIXME: Find formula
   } else {
     //FIXME: Find formula
   }
+
+  w_buffer = false;
+  float vertex_bottom_z = 0.0f;
+  float vertex_bottom_w = 1.0f;
+  float vertex_top_z = 0.0f;
+  float vertex_top_w = 1.0f;
+  float depth_scale = 0.5f;
+  float depth_offset = 0.5f;
+
+  // Configure depth mapping
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_SCALE, f32tof24(depth_scale));
+  GPUCMD_AddWrite(GPUREG_DEPTHMAP_OFFSET, f32tof24(depth_offset));
 
   C3D_FVUnifSet(GPU_VERTEX_SHADER, uLoc_vertex, vertex_bottom_z, vertex_bottom_w, vertex_top_z, vertex_top_w); // x = depth
 
@@ -168,8 +196,6 @@ void draw(void) {
   u32 compare_mode = GPU_ALWAYS;
   GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (!!depth_test) | ((compare_mode & 7) << 4) | (GPU_WRITE_ALL << 8));
 
-  set_depth_buffer(true);
-
   // Draw the VBO
   C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
 
@@ -177,6 +203,14 @@ void draw(void) {
   C3D_VideoSync();
 //    C3D_RenderBufTransfer(&rb, (u32*)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL), DISPLAY_TRANSFER_FLAGS);
 
+}
+
+void dump_frame() {
+  FILE* color = fopen("color.bin", "w");
+  fclose(color);
+
+  FILE* depth = fopen("depth.bin", "w");
+  fclose(depth);
 }
 
 int main() {
@@ -187,7 +221,7 @@ int main() {
 
   C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
 
-  C3D_RenderBufInit(&rb, 240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+  C3D_RenderBufInit(&rb, 256, 512, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
   rb.clearColor = CLEAR_COLOR;
   rb.clearDepth = 0x000000;
   C3D_RenderBufClear(&rb);
@@ -200,9 +234,9 @@ int main() {
 
   for(unsigned int i = 0; i < 128; i++) {
     set_fog_index(0);
-    set_select_fog(128);
+    set_linear_fog(0.0f, 0.0f, 128);
     set_fog_index(i);
-    set_linear_fog(1.0f, 0.0f, 1);
+    set_linear_fog(1.0f, 1.0f, 1);
 
     set_alpha_test(false);
     set_fog_mode(false, 0xFFFFFF00);
@@ -213,7 +247,7 @@ int main() {
   }
 
   // Deinitialize the scene
-  sceneExit();
+//  sceneExit();
 
   // Deinitialize graphics
   C3D_Fini();
