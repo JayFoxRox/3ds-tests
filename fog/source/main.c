@@ -117,9 +117,9 @@ void set_alpha_blend_mode() {
   return;
 }
 
-void set_logic_op_mode() {
+void set_logic_op_mode(GPU_LOGICOP op) {
 	GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 0 << 8);
-  GPUCMD_AddWrite(GPUREG_LOGIC_OP, 3); // copy mode
+  GPUCMD_AddWrite(GPUREG_LOGIC_OP, op); // copy mode
   return;
 }
 
@@ -228,7 +228,7 @@ static void dump_buffer32(const char* path, uint8_t* buffer, unsigned int width,
 
 static void dump_frame(const char* title, bool depth) {
   char path_buffer[1024];
-  printf("Generating '%s'\n", title);
+  printf("> %s\n", title);
   sprintf(path_buffer, "%s-color.tga", title);
   dump_buffer32(path_buffer, (u8*)rb.colorBuf.data, WIDTH, HEIGHT, true);
   if (depth) {
@@ -262,10 +262,12 @@ void fog_test_blend_and_lops(const char* title, bool w_buffer) {
   set_fog_mode(false, 0xFFFFFF00);
   fog_test_select(path_buffer, w_buffer, 9);
 
-  sprintf(path_buffer, "%s-logicop", title);
-  set_logic_op_mode();
-  set_fog_mode(false, 0xFFFFFF00);
-  fog_test_select(path_buffer, w_buffer, 9);
+  for(unsigned int op = 0; op <= 15; op++) {
+    sprintf(path_buffer, "%s-logicop-%d", title, op);
+    set_logic_op_mode(op);
+    set_fog_mode(false, 0xFFFFFF00);
+    fog_test_select(path_buffer, w_buffer, 63);
+  }
 
   return;
 }
