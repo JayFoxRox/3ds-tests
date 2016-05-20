@@ -112,9 +112,15 @@ void set_select_fog(float x, unsigned int count) {
 }
 
 void set_alpha_blend_mode() {
+	GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 1 << 8);
+  //FIXME: GPUREG_BLEND_FUNC
+  return;
 }
 
 void set_logic_op_mode() {
+	GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 0 << 8);
+  GPUCMD_AddWrite(GPUREG_LOGIC_OP, 3); // copy mode
+  return;
 }
 
 void set_fog_mode(bool z_flip, uint32_t color) {
@@ -231,26 +237,36 @@ static void dump_frame(const char* title, bool depth) {
   }
 }
 
-void fog_test_wbuffer(const char* title, bool w_buffer) {
-  char base_path_buffer[1024];
-  sprintf(base_path_buffer, "%s-%cbuffer", title, w_buffer ? 'w' : 'z');
-
-  for(unsigned int i = 0; i < 128; i += 4) {
+void fog_test_select(const char* title, bool w_buffer, int step) {
+  for(unsigned int i = 0; i < 128; i += step) {
     char path_buffer[1024];
-    sprintf(path_buffer, "%s-select-%u", base_path_buffer, i);
+    sprintf(path_buffer, "%s-%cbuffer-select-%u", title, w_buffer ? 'w' : 'z', i);
 
     set_fog_index(0);
     set_linear_fog(0.0f, 0.0f, 128);
     set_fog_index(i);
     set_linear_fog(1.0f, 1.0f, 1);
 
-    set_alpha_test(false);
-    set_fog_mode(false, 0xFFFFFF00);
     set_triangle(w_buffer, 0.0f, 1.0f);
 
     draw();
     dump_frame(path_buffer, i == 0);
   }
+}
+
+void fog_test_blend_and_lops(const char* title, bool w_buffer) {
+  char path_buffer[1024];
+
+  sprintf(path_buffer, "%s-blend", title);
+  set_alpha_blend_mode();
+  set_fog_mode(false, 0xFFFFFF00);
+  fog_test_select(path_buffer, w_buffer, 9);
+
+  sprintf(path_buffer, "%s-logicop", title);
+  set_logic_op_mode();
+  set_fog_mode(false, 0xFFFFFF00);
+  fog_test_select(path_buffer, w_buffer, 9);
+
   return;
 }
 
@@ -273,8 +289,8 @@ int main() {
 
   initialize();
 
-  fog_test_wbuffer("fog", true);
-  fog_test_wbuffer("fog", false);
+  fog_test_blend_and_lops("fog", true);
+  fog_test_blend_and_lops("fog", false);
 
   //FIXME: Test fog underflow and overflow
   //FIXME: Alpha fog
