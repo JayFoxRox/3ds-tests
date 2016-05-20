@@ -7,8 +7,8 @@
 #include <stdbool.h>
 #include "vshader_shbin.h"
 
-#define WIDTH 128
-#define HEIGHT 960
+#define WIDTH 96
+#define HEIGHT 768
 
 #define xstr(s) str(s)
 #define str(s) #s
@@ -111,15 +111,16 @@ void set_select_fog(float x, unsigned int count) {
   return;
 }
 
-void set_alpha_blend_mode() {
+#define DEFAULT_BLEND_MODE 6, 7, 6, 7 // Hack to make this compilable easily
+void set_alpha_blend_mode(uint8_t rgb_src, uint8_t rgb_dst, uint8_t a_src, uint8_t a_dst) {
 	GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 1 << 8);
-  //FIXME: GPUREG_BLEND_FUNC
+	GPUCMD_AddMaskedWrite(GPUREG_BLEND_FUNC, 0b1100, (a_dst << 28) | (a_src << 24) | (rgb_dst << 20) | (rgb_src << 16));
   return;
 }
 
 void set_logic_op_mode(GPU_LOGICOP op) {
 	GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 0 << 8);
-  GPUCMD_AddWrite(GPUREG_LOGIC_OP, op); // copy mode
+  GPUCMD_AddWrite(GPUREG_LOGIC_OP, op);
   return;
 }
 
@@ -135,6 +136,11 @@ void set_alpha_test(bool enabled) {
 
 void set_alpha_ref(bool enabled) {
   //FIXME: GPUREG_FRAGOP_ALPHA_TEST
+}
+
+void set_write_mask(uint8_t rgba_mask) {
+  GPUCMD_AddMaskedWrite(GPUREG_DEPTH_COLOR_MASK, 0b0010, rgba_mask << 8);
+  return;
 }
 
 void set_triangle(bool w_buffer, float top_depth, float bottom_depth) {
@@ -254,22 +260,78 @@ void fog_test_select(const char* title, bool w_buffer, int step) {
   }
 }
 
-void fog_test_blend_and_lops(const char* title, bool w_buffer) {
+void fog_test_linear_cut(const char* title, bool w_buffer) {
+  char path_buffer[1024];
+  sprintf(path_buffer, "%s-%cbuffer-linear-cut", title, w_buffer ? 'w' : 'z');
+
+  set_fog_index(0);
+  set_linear_fog(0.0f, 1.0f, 64);
+  set_fog_index(64);
+  set_linear_fog(0.0f, 1.0f, 64);
+
+  set_triangle(w_buffer, 0.0f, 1.0f);
+
+  draw();
+  dump_frame(path_buffer, false);
+}
+
+
+void fog_test_depth(const char* title, bool w_buffer) {
   char path_buffer[1024];
 
-  sprintf(path_buffer, "%s-blend", title);
-  set_alpha_blend_mode();
+  sprintf(path_buffer, "%s-depth", title);
+  set_alpha_blend_mode(DEFAULT_BLEND_MODE);
   set_fog_mode(false, 0xFFFFFF00);
   fog_test_select(path_buffer, w_buffer, 9);
+
+  return;
+}
+
+void fog_test_blend(const char* title) {
+  char path_buffer[1024];
+
+  sprintf(path_buffer, "%s-blend-default", title);
+  set_alpha_blend_mode(DEFAULT_BLEND_MODE);
+  set_fog_mode(false, 0xFFFFFF00);
+  fog_test_select(path_buffer, false, 9);
+
+  for(unsigned int dst_factor = 0; dst_factor <= 14; dst_factor++) {
+    for(unsigned int src_factor = 0; src_factor <= 14; src_factor++) {
+      sprintf(path_buffer, "%s-blend-src-%d-dst-%d", title, src_factor, dst_factor);
+      set_alpha_blend_mode(src_factor,dst_factor, src_factor,dst_factor);
+      set_fog_mode(false, 0xFFFFFF00);
+      fog_test_linear_cut(path_buffer, false);
+    }
+  }
+  return;
+}
+
+void fog_test_logicop(const char* title) {
+  char path_buffer[1024];
 
   for(unsigned int op = 0; op <= 15; op++) {
     sprintf(path_buffer, "%s-logicop-%d", title, op);
     set_logic_op_mode(op);
     set_fog_mode(false, 0xFFFFFF00);
-    fog_test_select(path_buffer, w_buffer, 63);
+    fog_test_linear_cut(path_buffer, false);
   }
 
   return;
+}
+
+void fog_test_write_mask(const char* title) {
+  char path_buffer[1024];
+
+  set_alpha_blend_mode(DEFAULT_BLEND_MODE);
+  set_fog_mode(false, 0xFFFFFF00);
+
+  for(unsigned int mask = 0; mask <= 15; mask++) {
+    sprintf(path_buffer, "%s-write-mask-%d", title, mask);
+    set_write_mask(mask);
+    fog_test_linear_cut(path_buffer, false);
+  }
+  set_write_mask(0xF); // Expected in all other tests!
+
 }
 
 int main() {
@@ -291,19 +353,22 @@ int main() {
 
   initialize();
 
-  fog_test_blend_and_lops("fog", true);
-  fog_test_blend_and_lops("fog", false);
+  fog_test_depth("fog", true);
+  fog_test_depth("fog", false);
+  fog_test_blend("fog");
+  fog_test_logicop("fog");
+  fog_test_write_mask("fog");
 
   //FIXME: Test fog underflow and overflow
   //FIXME: Alpha fog
-  //FIXME: Fog and alpha blending etc?
-  //FIXME: Fog on LOP?
 
   // Deinitialize the scene
 //  sceneExit();
 
+#if 0
   // Deinitialize graphics
   C3D_Fini();
   gfxExit();
+#endif
   return 0;
 }
