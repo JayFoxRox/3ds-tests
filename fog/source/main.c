@@ -8,7 +8,7 @@
 #include "vshader_shbin.h"
 
 #define WIDTH 128
-#define HEIGHT 1024
+#define HEIGHT 960
 
 #define xstr(s) str(s)
 #define str(s) #s
@@ -18,11 +18,6 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 #define CLEAR_COLOR 0x68B0D8FF
-
-#define DISPLAY_TRANSFER_FLAGS \
-  (GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
-  GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) | GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) | \
-  GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO))
 
 static C3D_RenderBuf rb;
 
@@ -272,7 +267,6 @@ int main() {
   rb.clearDepth = 0x000000;
   C3D_RenderBufClear(&rb);
   C3D_RenderBufBind(&rb);
-  C3D_SetViewport(0, 0, WIDTH, HEIGHT);
 
   // Initialize the scene
 //  sceneInit();
