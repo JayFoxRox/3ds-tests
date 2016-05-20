@@ -1,6 +1,3 @@
-; Uniforms
-.fvec projection[4]
-
 .fvec vertex
 
 ; Constants
@@ -21,19 +18,14 @@
   mul r2.xy, vertex.zw, inpos.zz ; xy += top_xy * weight
   add r1.xy, r1.xy, r2.xy 
 
-  ; r0 = inpos.xy, 0.5, 1.0
-  mul r0.xy,  inpos.xy, r1.yy
-  mov r0.z,   myconst.x
-  mov r0.w,   myconst.x
-
   ; r15 will be our weapon of choice to mirror outclr
   ; (each output component has to be written exactly one or the PICA will freeze)
   mov r15.xyz, v1.xyz
   mov r15.w, myconst.y
 
   ; outpos = projectionMatrix * inpos; force hardcoded z and w
-  dp4 outpos.x, projection[0], r0
-  dp4 outpos.y, projection[1], r0
+  mov outpos.x, inpos.x
+  mov outpos.y, inpos.y
   mov outpos.z, r1.x
   mov outpos.w, r1.y
 

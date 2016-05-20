@@ -7,6 +7,12 @@
 #include <stdbool.h>
 #include "vshader_shbin.h"
 
+#define WIDTH 128
+#define HEIGHT 1024
+
+#define xstr(s) str(s)
+#define str(s) #s
+
 #include "../../morton.h"
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
@@ -25,16 +31,14 @@ static DVLB_s* vshader_dvlb;
 static shaderProgram_s program;
 
 static int uLoc_vertex;
-static int uLoc_projection;
-static C3D_Mtx projection;
 
 struct {
   float x, y, weight; // weight = 0.0:bottom / 1.0:top
   float r, g, b;
 } vertices[] = {
-  {    0.0f,   256.0f, 1.0f, 1.0f, 0.0f, 0.0f },
-  { -128.0f,  -256.0f, 0.0f, 0.0f, 1.0f, 0.0f },
-  { +128.0f,  -256.0f, 0.0f, 0.0f, 0.0f, 1.0f }
+  {  0.0f,   1.0f, 1.0f, 1.0f, 0.0f, 0.0f },
+  { -1.0f,  -1.0f, 0.0f, 0.0f, 1.0f, 0.0f },
+  { +1.0f,  -1.0f, 0.0f, 0.0f, 0.0f, 1.0f },
 };
 
 static void* vbo_data;
@@ -49,14 +53,6 @@ void initialize(void) {
   
   // Get the location of the uniforms
   uLoc_vertex = shaderInstanceGetUniformLocation(program.vertexShader, "vertex");
-  uLoc_projection = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
-
-  // Compute the projection matrix
-  Mtx_OrthoTilt(&projection, -128.0, 128.0, -256.0, 256.0, 0.0, 1.0);
-  //FIXME: Avoid the rotation!
-
-  // Update the uniforms
-  C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
 
   // Create the VBO (vertex buffer object)
   vbo_data = linearAlloc(sizeof(vertices));
@@ -81,21 +77,6 @@ void initialize(void) {
   C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
 
 }
-
-void update(void) {
-
-/*
-  // Coordinate system has been corrected to reflect actual display orientation
-  u32 raw_buffer = *(u32*)get_depth(200, 120);
-  uint32_t raw_result = raw_buffer & 0xFFFFFF;
-  float f_result = raw_result / (float)0xFFFFFF;
-
-  printf("\n");
-  printf("Last frame depth: 0x%06" PRIX32 " = %+.3f\n", raw_result, f_result);
-*/
-
-}
-
 
 void set_fog_index(unsigned int index) {
   GPUCMD_AddWrite(GPUREG_FOG_LUT_INDEX, index);
@@ -143,7 +124,8 @@ void set_logic_op_mode() {
 
 void set_fog_mode(bool z_flip, uint32_t color) {
   GPUCMD_AddWrite(GPUREG_FOG_COLOR, color);
-//FIXME!  GPUCMD_AddWrite(GPUREG_TEXENV_UPDATE_BUFFER, z_flip ? (1<<16) : 0, 0xFF0F);
+  unsigned int fog_mode = 5;
+	GPUCMD_AddMaskedWrite(GPUREG_TEXENV_UPDATE_BUFFER, 0b0101, (z_flip ? (1<<16) : 0) | fog_mode);
   return;
 }
 
@@ -157,19 +139,15 @@ void set_alpha_ref(bool enabled) {
 void set_triangle(bool w_buffer, float top_depth, float bottom_depth) {
 
 
-  if (w_buffer) {
-    //FIXME: Find formula
-  } else {
-    //FIXME: Find formula
-  }
-
-  w_buffer = false;
-  float vertex_bottom_z = 0.0f;
+  float vertex_bottom_z = -top_depth;
   float vertex_bottom_w = 1.0f;
-  float vertex_top_z = 0.0f;
+  float vertex_top_z = -bottom_depth;
   float vertex_top_w = 1.0f;
-  float depth_scale = 0.5f;
-  float depth_offset = 0.5f;
+  float depth_scale = -1.0f;
+  float depth_offset = 0.0f;
+  if (w_buffer) {
+    //FIXME: Do something to depth_offset but make sure we still reach the top_depth and bottom_depth!
+  }
 
   // Configure depth mapping
   GPUCMD_AddWrite(GPUREG_DEPTHMAP_ENABLE, w_buffer ? 0x00000000 : 0x00000001);
@@ -205,12 +183,80 @@ void draw(void) {
 
 }
 
-void dump_frame() {
-  FILE* color = fopen("color.bin", "w");
-  fclose(color);
+static void dump_buffer32(const char* path, uint8_t* buffer, unsigned int width, unsigned int height, bool rgbflip) {
 
-  FILE* depth = fopen("depth.bin", "w");
-  fclose(depth);
+  struct TGAHeader {
+      char  idlength;
+      char  colormaptype;
+      char  datatypecode;
+      short int colormaporigin;
+      short int colormaplength;
+      short int x_origin;
+      short int y_origin;
+      short width;
+      short height;
+      char  bitsperpixel;
+      char  imagedescriptor;
+  };
+
+  struct TGAHeader hdr = {0, 0, 2, 0, 0, 0, 0, width, height, 32, 0};
+  FILE* f = fopen(path, "wb");
+
+  fwrite(&hdr, sizeof(struct TGAHeader), 1, f);
+
+  uint8_t* row_buffer = malloc(width * 4);
+  for (unsigned int y = 0; y < height; y++) {
+    uint8_t* out_pixel = row_buffer;
+    for (unsigned int x = 0; x < width; x++) {
+      uint8_t* pixel = &buffer[GetPixelOffset(x, y, width, height, 4)];
+
+      //FIXME: Buffer to row. this is slow ..
+
+      *out_pixel++ = pixel[rgbflip ? 1 : 0];
+      *out_pixel++ = pixel[rgbflip ? 2 : 1];
+      *out_pixel++ = pixel[rgbflip ? 3 : 2];
+      *out_pixel++ = rgbflip ? pixel[0] : 255; // Alpha
+
+    }
+    fwrite(row_buffer, 1, width * 4, f);
+  }
+  free(row_buffer);
+
+  fclose(f);
+}
+
+static void dump_frame(const char* title, bool depth) {
+  char path_buffer[1024];
+  printf("Generating '%s'\n", title);
+  sprintf(path_buffer, "%s-color.tga", title);
+  dump_buffer32(path_buffer, (u8*)rb.colorBuf.data, WIDTH, HEIGHT, true);
+  if (depth) {
+    sprintf(path_buffer, "%s-depth.tga", title);
+    dump_buffer32(path_buffer, (u8*)rb.depthBuf.data, WIDTH, HEIGHT, false);
+  }
+}
+
+void fog_test_wbuffer(const char* title, bool w_buffer) {
+  char base_path_buffer[1024];
+  sprintf(base_path_buffer, "%s-%cbuffer", title, w_buffer ? 'w' : 'z');
+
+  for(unsigned int i = 0; i < 128; i += 4) {
+    char path_buffer[1024];
+    sprintf(path_buffer, "%s-select-%u", base_path_buffer, i);
+
+    set_fog_index(0);
+    set_linear_fog(0.0f, 0.0f, 128);
+    set_fog_index(i);
+    set_linear_fog(1.0f, 1.0f, 1);
+
+    set_alpha_test(false);
+    set_fog_mode(false, 0xFFFFFF00);
+    set_triangle(w_buffer, 0.0f, 1.0f);
+
+    draw();
+    dump_frame(path_buffer, i == 0);
+  }
+  return;
 }
 
 int main() {
@@ -221,30 +267,25 @@ int main() {
 
   C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
 
-  C3D_RenderBufInit(&rb, 256, 512, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+  C3D_RenderBufInit(&rb, WIDTH, HEIGHT, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
   rb.clearColor = CLEAR_COLOR;
   rb.clearDepth = 0x000000;
   C3D_RenderBufClear(&rb);
   C3D_RenderBufBind(&rb);
+  C3D_SetViewport(0, 0, WIDTH, HEIGHT);
 
   // Initialize the scene
 //  sceneInit();
 
   initialize();
 
-  for(unsigned int i = 0; i < 128; i++) {
-    set_fog_index(0);
-    set_linear_fog(0.0f, 0.0f, 128);
-    set_fog_index(i);
-    set_linear_fog(1.0f, 1.0f, 1);
+  fog_test_wbuffer("fog", true);
+  fog_test_wbuffer("fog", false);
 
-    set_alpha_test(false);
-    set_fog_mode(false, 0xFFFFFF00);
-    set_triangle(true, 0.0f, 1.0f);
-
-    draw();
-    dump_frame();
-  }
+  //FIXME: Test fog underflow and overflow
+  //FIXME: Alpha fog
+  //FIXME: Fog and alpha blending etc?
+  //FIXME: Fog on LOP?
 
   // Deinitialize the scene
 //  sceneExit();
