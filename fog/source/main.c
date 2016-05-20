@@ -113,13 +113,14 @@ void set_select_fog(float x, unsigned int count) {
 
 #define DEFAULT_BLEND_MODE 6, 7, 6, 7 // Hack to make this compilable easily
 void set_alpha_blend_mode(uint8_t rgb_src, uint8_t rgb_dst, uint8_t a_src, uint8_t a_dst) {
-	GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 1 << 8);
-	GPUCMD_AddMaskedWrite(GPUREG_BLEND_FUNC, 0b1100, (a_dst << 28) | (a_src << 24) | (rgb_dst << 20) | (rgb_src << 16));
+  GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 1 << 8);
+  GPUCMD_AddMaskedWrite(GPUREG_BLEND_FUNC, 0b1100, (a_dst << 28) | (a_src << 24) | (rgb_dst << 20) | (rgb_src << 16));
+  GPUCMD_AddWrite(GPUREG_BLEND_COLOR, 0x80808080);
   return;
 }
 
 void set_logic_op_mode(GPU_LOGICOP op) {
-	GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 0 << 8);
+  GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 0 << 8);
   GPUCMD_AddWrite(GPUREG_LOGIC_OP, op);
   return;
 }
@@ -127,7 +128,7 @@ void set_logic_op_mode(GPU_LOGICOP op) {
 void set_fog_mode(bool z_flip, uint32_t color) {
   GPUCMD_AddWrite(GPUREG_FOG_COLOR, color);
   unsigned int fog_mode = 5;
-	GPUCMD_AddMaskedWrite(GPUREG_TEXENV_UPDATE_BUFFER, 0b0101, (z_flip ? (1<<16) : 0) | fog_mode);
+  GPUCMD_AddMaskedWrite(GPUREG_TEXENV_UPDATE_BUFFER, 0b0101, (z_flip ? (1<<16) : 0) | fog_mode);
   return;
 }
 
@@ -332,6 +333,7 @@ void fog_test_write_mask(const char* title) {
   }
   set_write_mask(0xF); // Expected in all other tests!
 
+  return;
 }
 
 int main() {
