@@ -179,7 +179,7 @@ void draw(void) {
   // Disable or enable depth test..
   bool depth_test = false;
   u32 compare_mode = GPU_ALWAYS;
-  GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (!!depth_test) | ((compare_mode & 7) << 4) | (GPU_WRITE_ALL << 8));
+  GPUCMD_AddMaskedWrite(GPUREG_DEPTH_COLOR_MASK, 0b0001, (!!depth_test) | ((compare_mode & 7) << 4));
 
   // Draw the VBO
   C3D_DrawArrays(GPU_TRIANGLES, 0, 3);
