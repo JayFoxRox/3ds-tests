@@ -104,13 +104,6 @@ void set_linear_fog(float start, float end, unsigned int count) {
 
 }
 
-void set_select_fog(float x, unsigned int count) {
-  for(unsigned int i = 0; i < count; i++) {
-    upload_fog_value(x, 0.0f);
-  }
-  return;
-}
-
 #define DEFAULT_BLEND_MODE 6, 7, 6, 7 // Hack to make this compilable easily
 void set_alpha_blend_mode(uint8_t rgb_src, uint8_t rgb_dst, uint8_t a_src, uint8_t a_dst) {
   GPUCMD_AddMaskedWrite(GPUREG_COLOR_OPERATION, 0b0010, 1 << 8);
@@ -277,12 +270,12 @@ void fog_test_linear_cut(const char* title, bool w_buffer) {
 }
 
 
-void fog_test_depth(const char* title, bool w_buffer) {
+void fog_test_depth(const char* title, bool w_buffer, bool z_flip) {
   char path_buffer[1024];
 
-  sprintf(path_buffer, "%s-depth", title);
+  sprintf(path_buffer, "%s-depth%s", title, z_flip ? "-zflip" : "");
   set_alpha_blend_mode(DEFAULT_BLEND_MODE);
-  set_fog_mode(false, 0xFFFFFF00);
+  set_fog_mode(z_flip, 0xFFFFFF00);
   fog_test_select(path_buffer, w_buffer, 9);
 
   return;
@@ -336,6 +329,101 @@ void fog_test_write_mask(const char* title) {
   return;
 }
 
+void fog_test_error(const char* title) {
+  char path_buffer[1024];
+
+  set_triangle(false, 0.4f, 0.6f);
+
+  // Overflow fog value
+  sprintf(path_buffer, "%s-error-overflow", title);
+
+  set_fog_index(0);
+  set_linear_fog(0.0f, 0.0f, 128);
+  set_fog_index(64);
+  set_linear_fog(1.0f, 1.9f, 1);
+
+  draw();
+  dump_frame(path_buffer, false);
+
+  // underflow fog value
+  sprintf(path_buffer, "%s-error-underflow", title);
+
+  set_fog_index(0);
+  set_linear_fog(1.0f, 1.0f, 128);
+  set_fog_index(64);
+  set_linear_fog(0.0f, -0.9f, 1);
+
+  draw();
+  dump_frame(path_buffer, false);
+}
+
+void fog_startup_index(const char* title) {
+  char path_buffer[1024];
+
+  // underflow fog value
+  sprintf(path_buffer, "%s-startup+0-set-1", title);
+  set_linear_fog(1.0f, 1.0f, 1);
+  draw();
+  dump_frame(path_buffer, false);
+
+  sprintf(path_buffer, "%s-startup+1-set-0", title);
+  set_linear_fog(0.0f, 0.0f, 1);
+  draw();
+  dump_frame(path_buffer, false);
+
+  sprintf(path_buffer, "%s-startup+2-set-1", title);
+  set_linear_fog(1.0f, 1.0f, 1);
+  draw();
+  dump_frame(path_buffer, false);
+
+  // Now overflow fog index + next entry
+  set_linear_fog(0.0f, 0.0f, 128);
+  sprintf(path_buffer, "%s-startup+128+3-set-1-after-clear", title);
+  set_linear_fog(1.0f, 1.0f, 1);
+  draw();
+  dump_frame(path_buffer, false);
+
+  sprintf(path_buffer, "%s-startup+128+4-set-all-linear", title);
+  set_linear_fog(0.0f, 0.5f, 128); // Overflow with linear fade
+  draw();
+  dump_frame(path_buffer, false);
+}
+
+
+static void thread_func(void* arg) {
+  set_linear_fog(1.0f, 1.0f, 16);
+  svcExitThread();
+}
+void fog_thread_index(const char* title) {
+  char path_buffer[1024];
+
+  // Select entry 64
+  sprintf(path_buffer, "%s-thread-1", title);
+  set_fog_index(0);
+  set_linear_fog(0.0f, 0.0f, 128);
+  set_fog_index(64-16);
+  set_linear_fog(1.0f, 1.0f, 8);
+  draw();
+  dump_frame(path_buffer, false);
+
+  // Now upload 16 entries in another thread
+  sprintf(path_buffer, "%s-thread-2", title);
+  size_t stack_size = 0x10000;
+  Thread thread = threadCreate(thread_func, 0, stack_size, 0x3F, -2, false);
+  threadJoin(thread, U64_MAX);
+  threadFree(thread);
+  draw();
+  dump_frame(path_buffer, false);
+
+  // And add the remaining entries here
+  sprintf(path_buffer, "%s-thread-3", title);
+  set_linear_fog(1.0f, 1.0f, 8);
+  draw();
+  dump_frame(path_buffer, false);
+  return;
+
+}
+
 int main() {
   // Initialize graphics
   gfxInitDefault();
@@ -355,14 +443,29 @@ int main() {
 
   initialize();
 
-  fog_test_depth("fog", true);
-  fog_test_depth("fog", false);
+  // Set some default modes for fog
+  set_alpha_blend_mode(DEFAULT_BLEND_MODE);
+  set_fog_mode(false, 0xFFFFFF00);
+  set_triangle(false, 0.0f, 1.0f);
+
+  // Check what the fog lut index is at startup
+  // It's important that nothing else has set the fog index before!
+  fog_startup_index("fog");
+
+  fog_thread_index("fog");
+  fog_test_error("fog");
+  fog_test_depth("fog", true, false);
+  fog_test_depth("fog", false, false);
+  fog_test_depth("fog", true, true);
+  fog_test_depth("fog", false, true);
   fog_test_blend("fog");
   fog_test_logicop("fog");
   fog_test_write_mask("fog");
 
   //FIXME: Test fog underflow and overflow
   //FIXME: Alpha fog
+
+  svcExitProcess(0);
 
   // Deinitialize the scene
 //  sceneExit();
