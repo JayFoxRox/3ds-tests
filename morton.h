@@ -1,3 +1,7 @@
+#ifndef __MORTON_H__
+#define __MORTON_H__
+
+
 // Stolen from citra at https://github.com/citra-emu/citra/blob/master/src/video_core/utils.h
 
 // Copyright 2014 Citra Emulator Project
@@ -57,3 +61,5 @@ static u32 GetPixelOffset(u32 x, u32 y, u32 width, u32 height, u32 bytes_per_pix
   u32 stride = width * bytes_per_pixel;
   return GetMortonOffset(x, new_y, bytes_per_pixel) + coarse_y * stride;
 }
+
+#endif

@@ -184,57 +184,9 @@ void draw(void) {
 
 }
 
-static void dump_buffer32(const char* path, uint8_t* buffer, unsigned int width, unsigned int height, bool rgbflip) {
-
-  struct TGAHeader {
-      char  idlength;
-      char  colormaptype;
-      char  datatypecode;
-      short int colormaporigin;
-      short int colormaplength;
-      short int x_origin;
-      short int y_origin;
-      short width;
-      short height;
-      char  bitsperpixel;
-      char  imagedescriptor;
-  };
-
-  struct TGAHeader hdr = {0, 0, 2, 0, 0, 0, 0, width, height, 32, 0};
-  FILE* f = fopen(path, "wb");
-
-  fwrite(&hdr, sizeof(struct TGAHeader), 1, f);
-
-  uint8_t* row_buffer = malloc(width * 4);
-  for (unsigned int y = 0; y < height; y++) {
-    uint8_t* out_pixel = row_buffer;
-    for (unsigned int x = 0; x < width; x++) {
-      uint8_t* pixel = &buffer[GetPixelOffset(x, y, width, height, 4)];
-
-      //FIXME: Buffer to row. this is slow ..
-
-      *out_pixel++ = pixel[rgbflip ? 1 : 0];
-      *out_pixel++ = pixel[rgbflip ? 2 : 1];
-      *out_pixel++ = pixel[rgbflip ? 3 : 2];
-      *out_pixel++ = rgbflip ? pixel[0] : 255; // Alpha
-
-    }
-    fwrite(row_buffer, 1, width * 4, f);
-  }
-  free(row_buffer);
-
-  fclose(f);
-}
-
-static void dump_frame(const char* title, bool depth) {
-  char path_buffer[1024];
-  printf("> %s\n", title);
-  sprintf(path_buffer, "%s-color.tga", title);
-  dump_buffer32(path_buffer, (u8*)rb.colorBuf.data, WIDTH, HEIGHT, true);
-  if (depth) {
-    sprintf(path_buffer, "%s-depth.tga", title);
-    dump_buffer32(path_buffer, (u8*)rb.depthBuf.data, WIDTH, HEIGHT, false);
-  }
+#include "../../frame.h"
+static void dump_frame_(const char* title, bool depth) {
+  dump_frame(&rb, title, depth, WIDTH, HEIGHT);
 }
 
 void fog_test_select(const char* title, bool w_buffer, int step) {
@@ -250,7 +202,7 @@ void fog_test_select(const char* title, bool w_buffer, int step) {
     set_triangle(w_buffer, 0.0f, 1.0f);
 
     draw();
-    dump_frame(path_buffer, i == 0);
+    dump_frame_(path_buffer, i == 0);
   }
 }
 
@@ -266,7 +218,7 @@ void fog_test_linear_cut(const char* title, bool w_buffer) {
   set_triangle(w_buffer, 0.0f, 1.0f);
 
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 }
 
 
@@ -343,7 +295,7 @@ void fog_test_error(const char* title) {
   set_linear_fog(1.0f, 1.9f, 1);
 
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 
   // underflow fog value
   sprintf(path_buffer, "%s-error-underflow", title);
@@ -354,7 +306,7 @@ void fog_test_error(const char* title) {
   set_linear_fog(0.0f, -0.9f, 1);
 
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 }
 
 void fog_startup_index(const char* title) {
@@ -364,29 +316,29 @@ void fog_startup_index(const char* title) {
   sprintf(path_buffer, "%s-startup+0-set-1", title);
   set_linear_fog(1.0f, 1.0f, 1);
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 
   sprintf(path_buffer, "%s-startup+1-set-0", title);
   set_linear_fog(0.0f, 0.0f, 1);
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 
   sprintf(path_buffer, "%s-startup+2-set-1", title);
   set_linear_fog(1.0f, 1.0f, 1);
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 
   // Now overflow fog index + next entry
   set_linear_fog(0.0f, 0.0f, 128);
   sprintf(path_buffer, "%s-startup+128+3-set-1-after-clear", title);
   set_linear_fog(1.0f, 1.0f, 1);
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 
   sprintf(path_buffer, "%s-startup+128+4-set-all-linear", title);
   set_linear_fog(0.0f, 0.5f, 128); // Overflow with linear fade
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 }
 
 
@@ -404,7 +356,7 @@ void fog_thread_index(const char* title) {
   set_fog_index(64-16);
   set_linear_fog(1.0f, 1.0f, 8);
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 
   // Now upload 16 entries in another thread
   sprintf(path_buffer, "%s-thread-2", title);
@@ -413,13 +365,13 @@ void fog_thread_index(const char* title) {
   threadJoin(thread, U64_MAX);
   threadFree(thread);
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
 
   // And add the remaining entries here
   sprintf(path_buffer, "%s-thread-3", title);
   set_linear_fog(1.0f, 1.0f, 8);
   draw();
-  dump_frame(path_buffer, false);
+  dump_frame_(path_buffer, false);
   return;
 
 }
