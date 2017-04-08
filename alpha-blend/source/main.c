@@ -19,12 +19,34 @@ const char* blend_names[] = {
   "unknown15"
 };
 
+#define BE_8 \
+  "Add", \
+  "Subtract", \
+  "Reverse Subtract", \
+  "Minimum", \
+  "Maximum", \
+  "5", \
+  "6", \
+  "7",
+
+#define BE_16 BE_8 BE_8
+#define BE_32 BE_16 BE_16
+#define BE_64 BE_32 BE_32
+#define BE_128 BE_64 BE_64
+const char* blend_equations[] = {
+    BE_128 BE_128
+};
+
+ListSelector color_equation = { 0, ARRAY_SIZE(blend_equations), blend_equations };
+ListSelector alpha_equation = { 0, ARRAY_SIZE(blend_equations), blend_equations };
 ListSelector color_src_blend = { 0, ARRAY_SIZE(blend_names), blend_names };
 ListSelector color_dst_blend = { 0, ARRAY_SIZE(blend_names), blend_names };
 ListSelector alpha_src_blend = { 0, ARRAY_SIZE(blend_names), blend_names };
 ListSelector alpha_dst_blend = { 0, ARRAY_SIZE(blend_names), blend_names };
 
 Selection selections[] = {
+  { "RGB Equ", listSelectorModify, listSelectorValue, &color_equation },
+  { " A  Equ", listSelectorModify, listSelectorValue, &alpha_equation },
   { "RGB Src", listSelectorModify, listSelectorValue, &color_src_blend },
   { "RGB Dst", listSelectorModify, listSelectorValue, &color_dst_blend },
   { " A  Src", listSelectorModify, listSelectorValue, &alpha_src_blend },
@@ -62,7 +84,7 @@ void initialize(void) {
   uLoc_projection = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
 
   // Compute the projection matrix
-  Mtx_OrthoTilt(&projection, -200.0, 200.0, -120.0, 120.0, 0.0, 1.0);
+  Mtx_OrthoTilt(&projection, -200.0, 200.0, -120.0, 120.0, 0.0, 1.0, true);
 
   // Update the uniforms
   C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
@@ -110,8 +132,8 @@ void draw(void) {
   // WARNING: DO **NOT** USE ANY C3D STUFF, ESPECIALLY NOTHING EFFECT RELATED!
 
   GPUCMD_AddWrite(GPUREG_BLEND_COLOR, 0x33333333);
-  GPUCMD_AddWrite(GPUREG_BLEND_FUNC, (GPU_BLEND_ADD << 0) |
-                                     (GPU_BLEND_ADD << 8) |
+  GPUCMD_AddWrite(GPUREG_BLEND_FUNC, (color_equation.index << 0) |
+                                     (alpha_equation.index << 8) |
                                      (color_src_blend.index << 16) |
                                      (color_dst_blend.index << 20) |
                                      (alpha_src_blend.index << 24) |
